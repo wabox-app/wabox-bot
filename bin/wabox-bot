@@ -16,12 +16,54 @@ shopt -s nullglob
 ROOT="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
 LIB_DIR="$ROOT/lib"
 
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") [--backend <name>]
+
+Options:
+  --backend <name>    use this backend (overrides WABOX_BOT_BACKEND;
+                      default: claude-code). Available backends are .sh
+                      files in lib/backends/.
+  -h, --help          show this message and exit
+EOF
+}
+
+# Argument parsing. The CLI flag wins over the env var; both win over the
+# "claude-code" default in lib/backend.sh.
+BACKEND_OVERRIDE=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --backend)
+      [[ $# -ge 2 ]] || { printf 'wabox-bot: --backend requires a value\n' >&2; exit 1; }
+      BACKEND_OVERRIDE="$2"
+      shift 2
+      ;;
+    --backend=*)
+      BACKEND_OVERRIDE="${1#--backend=}"
+      shift
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *)
+      printf 'wabox-bot: unknown argument: %s\n' "$1" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+done
+if [[ -n "$BACKEND_OVERRIDE" ]]; then
+  WABOX_BOT_BACKEND="$BACKEND_OVERRIDE"
+fi
+
 # Source order matters:
 #   - config defines paths used by everyone else
-#   - log defines log_* used by check_dependencies + locks
+#   - log defines log_* used by check_dependencies + locks + backend
 #   - locks reads PID_LOCK + log_error
 #   - routing and outbox are self-contained
-#   - backend sources lib/backends/<name>.sh and depends on log_*
+#   - backend resolves WABOX_BOT_BACKEND, sources lib/backends/<name>.sh,
+#     and runs the backend's own dep check
 #   - commands depends on backend_* hooks being available
 #   - inbox depends on routing, outbox, commands, backend
 #   - loop depends on inbox

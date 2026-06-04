@@ -32,10 +32,6 @@ PROCESSED_DIR="${PROCESSED_DIR:-$WABOX_INBOX/processed}"
 LOG_FILE="${LOG_FILE:-$STATE_DIR/agent.log}"
 PID_LOCK="$STATE_DIR/wabox-bot.lock"
 
-CLAUDE_BIN="${CLAUDE_BIN:-claude}"
-CLAUDE_ARGS="${CLAUDE_ARGS:---permission-mode auto}"
-CLAUDE_TIMEOUT="${CLAUDE_TIMEOUT:-180}"
-SYSTEM_PROMPT_FILE="${SYSTEM_PROMPT_FILE:-}"
 GROUP_PER_PARTICIPANT="${GROUP_PER_PARTICIPANT:-0}"
 IGNORE_FROM_ME="${IGNORE_FROM_ME:-1}"
 KEEP_PROCESSED="${KEEP_PROCESSED:-1}"
@@ -55,5 +51,4 @@ check_dependencies() {
   need jq
   need flock
   need timeout
-  need "$CLAUDE_BIN"
 }

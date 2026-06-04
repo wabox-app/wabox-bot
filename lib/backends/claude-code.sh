@@ -14,8 +14,19 @@
 #   backend_help              — supplies the /help lines for our commands
 #   backend_status_lines      — supplies the /status block
 
+# Backend-specific env defaults. Users can still override any of these via
+# their shell environment — these are only consulted if the var is unset.
+CLAUDE_BIN="${CLAUDE_BIN:-claude}"
+CLAUDE_ARGS="${CLAUDE_ARGS:---permission-mode auto}"
+CLAUDE_TIMEOUT="${CLAUDE_TIMEOUT:-180}"
+SYSTEM_PROMPT_FILE="${SYSTEM_PROMPT_FILE:-}"
+
 backend_name() {
   printf 'claude-code\n'
+}
+
+backend_check_dependencies() {
+  need "$CLAUDE_BIN"
 }
 
 # ---- Per-conversation state files ------------------------------------------

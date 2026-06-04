@@ -13,8 +13,6 @@ run_main_loop() {
   log_info "  outbox    = $WABOX_OUTBOX"
   log_info "  state     = $STATE_DIR"
   log_info "  processed = $PROCESSED_DIR$([[ $KEEP_PROCESSED == 1 ]] && echo "" || echo " (deleted after reply)")"
-  log_info "  claude    = $CLAUDE_BIN $CLAUDE_ARGS"
-  log_info "  timeout   = ${CLAUDE_TIMEOUT}s"
   log_info "  groupMode = $([[ $GROUP_PER_PARTICIPANT == 1 ]] && echo per-participant || echo per-chat)"
 
   if [[ ! -d "$WABOX_INBOX" ]]; then
