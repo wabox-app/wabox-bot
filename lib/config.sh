@@ -23,6 +23,19 @@ default_paths_from_wabox
 WABOX_INBOX="${WABOX_INBOX:-$WABOX_INBOX_DEFAULT}"
 WABOX_OUTBOX="${WABOX_OUTBOX:-$WABOX_OUTBOX_DEFAULT}"
 STATE_DIR="${STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/wabox-bot}"
+
+# Auto-migrate the default state directory from the in-tree
+# wabox-claude-code.sh era. We only touch the path if it's the *default*
+# AND the new location doesn't exist yet; users who set STATE_DIR
+# explicitly are responsible for their own move. Runs before mkdir so the
+# new STATE_DIR is freshly populated by the move, not created empty.
+_old_default_state="${XDG_STATE_HOME:-$HOME/.local/state}/wabox-claude"
+if [[ "$STATE_DIR" == "${XDG_STATE_HOME:-$HOME/.local/state}/wabox-bot" \
+      && -d "$_old_default_state" && ! -e "$STATE_DIR" ]]; then
+  mv "$_old_default_state" "$STATE_DIR"
+fi
+unset _old_default_state
+
 SESSIONS_DIR="$STATE_DIR/sessions"
 LOCKS_DIR="$STATE_DIR/locks"
 # Default to a `processed/` sibling inside the inbox so the audit trail lives
@@ -35,6 +48,10 @@ PID_LOCK="$STATE_DIR/wabox-bot.lock"
 GROUP_PER_PARTICIPANT="${GROUP_PER_PARTICIPANT:-0}"
 IGNORE_FROM_ME="${IGNORE_FROM_ME:-1}"
 KEEP_PROCESSED="${KEEP_PROCESSED:-1}"
+# Generic shutdown drain timeout — how long to give in-flight handlers to
+# finish on SIGTERM/SIGINT before escalating. Should be at least as long as
+# the longest backend reply timeout.
+SHUTDOWN_DRAIN_TIMEOUT="${SHUTDOWN_DRAIN_TIMEOUT:-180}"
 
 mkdir -p "$STATE_DIR" "$SESSIONS_DIR" "$LOCKS_DIR" "$PROCESSED_DIR" \
   "$(dirname "$LOG_FILE")" "$WABOX_OUTBOX"

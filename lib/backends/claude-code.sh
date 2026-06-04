@@ -30,48 +30,57 @@ backend_check_dependencies() {
 }
 
 # ---- Per-conversation state files ------------------------------------------
+#
+# All state lives under $(backend_state_dir "$slug"), which expands to
+# $SESSIONS_DIR/<slug>/claude-code/. Switching backends for the same
+# conversation doesn't smush state together; legacy flat files are migrated
+# into this layout by lib/migrate.sh on first run.
 
 cc_session_id_for() {
-  local f="$SESSIONS_DIR/$1.session"
+  local f
+  f="$(backend_state_dir "$1")/session"
   [[ -s "$f" ]] && cat "$f"
 }
 
 cc_save_session_id() {
   local slug="$1" sid="$2"
-  printf '%s\n' "$sid" >"$SESSIONS_DIR/$slug.session"
+  printf '%s\n' "$sid" >"$(backend_state_dir "$slug")/session"
 }
 
 cc_model_for() {
-  local f="$SESSIONS_DIR/$1.model"
+  local f
+  f="$(backend_state_dir "$1")/model"
   [[ -s "$f" ]] && cat "$f"
 }
 
 cc_save_model_for() {
   local slug="$1" name="$2"
-  printf '%s\n' "$name" >"$SESSIONS_DIR/$slug.model"
+  printf '%s\n' "$name" >"$(backend_state_dir "$slug")/model"
 }
 
 cc_mode_for() {
-  local f="$SESSIONS_DIR/$1.mode"
+  local f
+  f="$(backend_state_dir "$1")/mode"
   [[ -s "$f" ]] && cat "$f"
 }
 
 cc_save_mode_for() {
   local slug="$1" name="$2"
-  printf '%s\n' "$name" >"$SESSIONS_DIR/$slug.mode"
+  printf '%s\n' "$name" >"$(backend_state_dir "$slug")/mode"
 }
 
 # Per-conversation system prompt override. Stored verbatim (no trailing
 # newline added) so multi-line prompts round-trip; appended via
 # --append-system-prompt on top of any global SYSTEM_PROMPT_FILE.
 cc_system_for() {
-  local f="$SESSIONS_DIR/$1.system"
+  local f
+  f="$(backend_state_dir "$1")/system"
   [[ -s "$f" ]] && cat "$f"
 }
 
 cc_save_system_for() {
   local slug="$1" prompt="$2"
-  printf '%s' "$prompt" >"$SESSIONS_DIR/$slug.system"
+  printf '%s' "$prompt" >"$(backend_state_dir "$slug")/system"
 }
 
 # ---- The Claude turn -------------------------------------------------------
@@ -141,7 +150,7 @@ backend_reply() {
 
 backend_clear() {
   local slug="$1"
-  rm -f -- "$SESSIONS_DIR/$slug.session"
+  rm -f -- "$(backend_state_dir "$slug")/session"
 }
 
 backend_help() {
@@ -201,7 +210,7 @@ Usage:
         (
           exec 8>"$LOCKS_DIR/$slug.lock"
           flock -x 8
-          rm -f -- "$SESSIONS_DIR/$slug.model"
+          rm -f -- "$(backend_state_dir "$slug")/model"
         )
         reply_path="$(write_outbox "$to" \
           "Model override removed; using Claude's default." \
@@ -249,7 +258,7 @@ Usage:
         (
           exec 8>"$LOCKS_DIR/$slug.lock"
           flock -x 8
-          rm -f -- "$SESSIONS_DIR/$slug.mode"
+          rm -f -- "$(backend_state_dir "$slug")/mode"
         )
         reply_path="$(write_outbox "$to" \
           "Mode override removed; using CLAUDE_ARGS default." \
@@ -305,7 +314,7 @@ $system_now" \
         (
           exec 8>"$LOCKS_DIR/$slug.lock"
           flock -x 8
-          rm -f -- "$SESSIONS_DIR/$slug.system"
+          rm -f -- "$(backend_state_dir "$slug")/system"
         )
         reply_path="$(write_outbox "$to" \
           "System prompt removed for this conversation." \

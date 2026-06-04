@@ -34,8 +34,9 @@ shutdown() {
     kill "$INOTIFY_PID" 2>/dev/null || true
   fi
 
-  # Give handlers up to CLAUDE_TIMEOUT + 10s to finish gracefully, then SIGTERM
-  local deadline=$(($(date +%s) + CLAUDE_TIMEOUT + 10))
+  # Give handlers up to SHUTDOWN_DRAIN_TIMEOUT + 10s to finish gracefully,
+  # then SIGTERM.
+  local deadline=$(($(date +%s) + SHUTDOWN_DRAIN_TIMEOUT + 10))
   while ((${#CHILDREN[@]} > 0)); do
     reap_children
     ((${#CHILDREN[@]} == 0)) && break

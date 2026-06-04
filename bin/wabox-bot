@@ -82,6 +82,9 @@ source "$LIB_DIR/routing.sh"
 source "$LIB_DIR/outbox.sh"
 # shellcheck source=lib/backend.sh
 source "$LIB_DIR/backend.sh"
+# shellcheck source=lib/migrate.sh
+source "$LIB_DIR/migrate.sh"
+run_migrations
 # shellcheck source=lib/commands.sh
 source "$LIB_DIR/commands.sh"
 # shellcheck source=lib/inbox.sh

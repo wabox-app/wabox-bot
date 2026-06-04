@@ -47,4 +47,14 @@ if declare -f backend_check_dependencies >/dev/null; then
   backend_check_dependencies
 fi
 
+# Per-conversation, per-backend state directory. Backends use this to
+# scope their .session / .model / preferences files so that switching
+# backends doesn't smush state together.
+backend_state_dir() {
+  local slug="$1"
+  local d="$SESSIONS_DIR/$slug/$(backend_name)"
+  mkdir -p "$d"
+  printf '%s' "$d"
+}
+
 log_info "backend = $(backend_name)"
