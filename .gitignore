@@ -1,0 +1,9 @@
+# Local state
+*.log
+.DS_Store
+.idea/
+.vscode/
+
+# bats helpers users may symlink
+test/bats/test_helper/bats-support
+test/bats/test_helper/bats-assert
