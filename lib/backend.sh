@@ -46,10 +46,6 @@ if [[ "$_loaded_name" != "$WABOX_BOT_BACKEND" ]]; then
 fi
 unset _loaded_name
 
-if declare -f backend_check_dependencies >/dev/null; then
-  backend_check_dependencies
-fi
-
 # Per-conversation, per-backend state directory. Backends use this to
 # scope their .session / .model / preferences files so that switching
 # backends doesn't smush state together.
@@ -59,6 +55,16 @@ backend_state_dir() {
   d="$SESSIONS_DIR/$slug/$(backend_name)"
   mkdir -p "$d"
   printf '%s' "$d"
+}
+
+# Run the backend's optional dep check. Kept as a function (rather than
+# auto-firing at source time) so test harnesses and other tooling can
+# source the backend purely for its function definitions without needing
+# the backend's external binaries on PATH.
+run_backend_dependency_check() {
+  if declare -f backend_check_dependencies >/dev/null; then
+    backend_check_dependencies
+  fi
 }
 
 log_info "backend = $(backend_name)"
