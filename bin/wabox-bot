@@ -16,9 +16,15 @@ shopt -s nullglob
 ROOT="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
 LIB_DIR="$ROOT/lib"
 
-# Source order matters: config defines paths used by everyone else; log
-# defines log_* used by check_dependencies; locks needs PID_LOCK from
-# config and log_error from log; the rest are independent.
+# Source order matters:
+#   - config defines paths used by everyone else
+#   - log defines log_* used by check_dependencies + locks
+#   - locks reads PID_LOCK + log_error
+#   - routing and outbox are self-contained
+#   - backend sources lib/backends/<name>.sh and depends on log_*
+#   - commands depends on backend_* hooks being available
+#   - inbox depends on routing, outbox, commands, backend
+#   - loop depends on inbox
 # shellcheck source=lib/config.sh
 source "$LIB_DIR/config.sh"
 # shellcheck source=lib/log.sh
@@ -32,6 +38,10 @@ install_signal_handlers
 source "$LIB_DIR/routing.sh"
 # shellcheck source=lib/outbox.sh
 source "$LIB_DIR/outbox.sh"
+# shellcheck source=lib/backend.sh
+source "$LIB_DIR/backend.sh"
+# shellcheck source=lib/commands.sh
+source "$LIB_DIR/commands.sh"
 # shellcheck source=lib/inbox.sh
 source "$LIB_DIR/inbox.sh"
 # shellcheck source=lib/loop.sh
