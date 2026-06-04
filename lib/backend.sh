@@ -24,7 +24,10 @@ if [[ ! -f "$BACKEND_FILE" ]]; then
   exit 1
 fi
 
-# shellcheck source=backends/claude-code.sh
+# The path is resolved at runtime from $WABOX_BOT_BACKEND; static analysis
+# can't follow it. The canonical claude-code path is followed by the
+# directive on the entrypoint side for shellcheck's benefit.
+# shellcheck disable=SC1090
 source "$BACKEND_FILE"
 
 for _fn in backend_name backend_reply; do
@@ -52,7 +55,8 @@ fi
 # backends doesn't smush state together.
 backend_state_dir() {
   local slug="$1"
-  local d="$SESSIONS_DIR/$slug/$(backend_name)"
+  local d
+  d="$SESSIONS_DIR/$slug/$(backend_name)"
   mkdir -p "$d"
   printf '%s' "$d"
 }

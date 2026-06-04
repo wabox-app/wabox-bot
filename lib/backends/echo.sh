@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Echo backend.
 #
 # Replies "echo: <text>" to every incoming message. Useful for smoke-testing
@@ -11,6 +12,7 @@ backend_name() {
 }
 
 backend_reply() {
+  # shellcheck disable=SC2034  # slug is part of the contract; unused here
   local slug="$1" conv_key="$2" stem="$3"
   local text
   text="$(cat)"

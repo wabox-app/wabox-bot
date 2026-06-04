@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Claude Code backend.
 #
 # Drives the `claude` CLI with `-p`, `--output-format json`, and

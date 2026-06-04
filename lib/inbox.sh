@@ -46,11 +46,12 @@ handle_envelope() {
   log_debug "[$stem] moved to $PROCESSED_DIR (read receipt fired)"
 
   # ---- Step 4: extract the bits we need ---------------------------------
-  local id from participant text from_me conv_key slug
-  id="$(jq -r '.id        // empty' <<<"$envelope")"
-  from="$(jq -r '.from    // empty' <<<"$envelope")"
-  participant="$(jq -r '.participant // empty' <<<"$envelope")"
-  text="$(jq -r '.text    // empty' <<<"$envelope")"
+  # (`participant` is parsed inside conversation_key() rather than here so
+  # it can pick its own routing strategy without us duplicating the jq.)
+  local id from text from_me conv_key slug
+  id="$(jq -r '.id     // empty' <<<"$envelope")"
+  from="$(jq -r '.from // empty' <<<"$envelope")"
+  text="$(jq -r '.text // empty' <<<"$envelope")"
   from_me="$(jq -r '.fromMe // false' <<<"$envelope")"
 
   if [[ "$IGNORE_FROM_ME" == "1" && "$from_me" == "true" ]]; then

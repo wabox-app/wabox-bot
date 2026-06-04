@@ -50,7 +50,8 @@ handle_slash_command() {
       return 0
       ;;
     /status)
-      local status_text="Status:
+      local status_text
+      status_text="Status:
 conv:    $conv_key
 backend: $(backend_name)"
       if declare -f backend_status_lines >/dev/null; then
