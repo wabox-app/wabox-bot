@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-06-04
+
+### Fixed
+
+- CI: bats tests no longer require the `claude` binary on `PATH`. The
+  claude-code backend's `backend_check_dependencies` ran at source time
+  in v0.1.0, which made it impossible to source the backend purely for
+  its function definitions (as bats does) without the backend's runtime
+  binaries installed. The check is now deferred to a
+  `run_backend_dependency_check` helper that the entrypoint invokes; the
+  runtime behaviour is unchanged (`wabox-bot` still fails fast at startup
+  when `CLAUDE_BIN` isn't on `PATH`).
+
 ## [0.1.0] - 2026-06-04
 
 ### Added
@@ -30,5 +43,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `install.sh` one-liner: clones to `~/.local/share/wabox-bot`, symlinks
   `bin/wabox-bot` into `~/.local/bin/`.
 
-[Unreleased]: https://github.com/rodgco/wabox-bot/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/rodgco/wabox-bot/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/rodgco/wabox-bot/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/rodgco/wabox-bot/releases/tag/v0.1.0
