@@ -13,10 +13,12 @@ jobs:
       - name: shellcheck
         run: |
           # The entrypoint sources every lib file in order, so -x covers
-          # the whole core. The backend files are loaded dynamically so
-          # they're checked separately.
+          # the whole core. Backend files and the installer are loaded
+          # dynamically / standalone so they're checked separately.
           shellcheck -x bin/wabox-bot
           shellcheck lib/backends/*.sh
+          shellcheck install.sh
+          shellcheck examples/aider.sh
 
   bats:
     runs-on: ubuntu-latest

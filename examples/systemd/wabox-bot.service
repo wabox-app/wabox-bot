@@ -1,0 +1,34 @@
+[Unit]
+Description=wabox-bot — WhatsApp ↔ agent bridge
+After=network-online.target
+Wants=network-online.target
+# Pair with a wabox.service if you have one — wabox writes the inbox we read.
+# After=wabox.service
+
+[Service]
+Type=simple
+# Replace with the path printed by `which wabox-bot` (typically
+# %h/.local/bin/wabox-bot after `install.sh`) or the absolute path of
+# your clone's bin/wabox-bot.
+ExecStart=%h/.local/bin/wabox-bot
+
+# Per-conversation slash-command overrides survive restarts because they
+# live under $STATE_DIR — no need to set them here. Use this section for
+# global defaults only.
+# Environment=WABOX_BOT_BACKEND=claude-code
+# Environment=CLAUDE_BIN=%h/.local/bin/claude
+# Environment=CLAUDE_ARGS=--permission-mode auto
+# Environment=CLAUDE_TIMEOUT=180
+
+# Send SIGTERM, give SHUTDOWN_DRAIN_TIMEOUT + a bit for in-flight handlers
+# to finish, then SIGKILL.
+KillSignal=SIGTERM
+TimeoutStopSec=200
+
+# Restart on failure but back off so a broken claude-code install doesn't
+# burn CPU spinning.
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=default.target
