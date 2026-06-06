@@ -8,7 +8,7 @@ commands, and per-conversation preferences all carry over automatically.
 ## TL;DR
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rodgco/wabox-bot/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/wabox-app/wabox-bot/main/install.sh | bash
 ~/.local/bin/wabox-bot
 ```
 
@@ -100,7 +100,7 @@ system:  <(none) or (set, N chars)>
 ```
 
 If the session id is `(none)`, something went wrong — open an issue at
-<https://github.com/rodgco/wabox-bot/issues> with the contents of
+<https://github.com/wabox-app/wabox-bot/issues> with the contents of
 `$STATE_DIR/agent.log`.
 
 ## Going back

@@ -36,14 +36,14 @@ takes care of:
 ### From source
 
 ```bash
-git clone https://github.com/rodgco/wabox-bot ~/wabox-bot
+git clone https://github.com/wabox-app/wabox-bot ~/wabox-bot
 ~/wabox-bot/bin/wabox-bot
 ```
 
 ### One-liner
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rodgco/wabox-bot/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/wabox-app/wabox-bot/main/install.sh | bash
 ```
 
 This clones into `~/.local/share/wabox-bot` and symlinks `bin/wabox-bot` into

@@ -12,7 +12,7 @@ set -euo pipefail
 
 INSTALL_PREFIX="${WABOX_BOT_PREFIX:-$HOME/.local/share/wabox-bot}"
 BIN_DIR="${WABOX_BOT_BIN_DIR:-$HOME/.local/bin}"
-REPO_URL="${WABOX_BOT_REPO:-https://github.com/rodgco/wabox-bot.git}"
+REPO_URL="${WABOX_BOT_REPO:-https://github.com/wabox-app/wabox-bot.git}"
 BRANCH="${WABOX_BOT_BRANCH:-main}"
 
 mkdir -p "$BIN_DIR"
