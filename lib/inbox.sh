@@ -79,15 +79,63 @@ handle_envelope() {
   conv_key="$(conversation_key "$envelope")"
   slug="$(key_slug "$conv_key")"
 
-  # Treat empty text as no-op (media-only messages). A real integration
-  # would download the media and feed it to the backend here.
-  if [[ -z "$text" ]]; then
-    log_info "[$stem] empty text (likely media-only); not replying"
+  # ---- Step 4b: media handling ------------------------------------------
+  # media_file was read in step 2 and the file moved to $PROCESSED_DIR in
+  # step 3. Audio is transcribed here (generic → becomes text); an image is
+  # staged and passed to the backend by reference. Other types are skipped.
+  local media_type media_mime media_rel="" had_media=0
+  media_type="$(media_type_of "$envelope")"
+  media_mime="$(media_mime_of "$envelope")"
+  if [[ -n "$media_type" ]]; then
+    had_media=1
+    local workdir
+    workdir="$(conversation_workdir "$slug")"
+    if ! media_rel="$(media_stage "$PROCESSED_DIR/$media_file" "$workdir")"; then
+      log_warn "[$stem] media file gone before staging; nothing to process"
+      return 0
+    fi
+    case "$media_type" in
+      audio)
+        if [[ -z "$WABOX_TRANSCRIBE_CMD" ]]; then
+          log_info "[$stem] audio message but WABOX_TRANSCRIBE_CMD unset; skipping"
+          return 0
+        fi
+        local transcript trc=0
+        transcript="$(media_transcribe "$workdir/$media_rel")" || trc=$?
+        if ((trc != 0)) || [[ -z "$transcript" ]]; then
+          log_error "[$stem] transcription failed (rc=$trc)"
+          write_outbox "$to" "(Não consegui transcrever o áudio.)" "$id" "$stem" >/dev/null
+          return 0
+        fi
+        # Transcript becomes the message text (caption first, if any). The
+        # media is now consumed — no media args go to the backend.
+        if [[ -n "$text" ]]; then
+          text="$text"$'\n\n'"$transcript"
+        else
+          text="$transcript"
+        fi
+        media_type="" media_mime="" media_rel=""
+        ;;
+      image)
+        : # keep media_rel/media_type/media_mime; passed to the backend below
+        ;;
+      *)
+        log_info "[$stem] unsupported media type '$media_type'; skipping"
+        return 0
+        ;;
+    esac
+  fi
+
+  # Nothing actionable: no text and no image to forward.
+  if [[ -z "$text" && -z "$media_rel" ]]; then
+    log_info "[$stem] empty message (no text, no actionable media); not replying"
     return 0
   fi
 
-  # ---- Step 5: agent-level slash commands -------------------------------
-  if handle_slash_command "$text" "$slug" "$conv_key" "$to" "$id" "$stem"; then
+  # ---- Step 5: agent-level slash commands (pure-text messages only) -----
+  # A caption that happens to start with "/" is treated as a caption, not a
+  # command, so media is never silently swallowed by the dispatcher.
+  if ((!had_media)) && handle_slash_command "$text" "$slug" "$conv_key" "$to" "$id" "$stem"; then
     return 0
   fi
 
@@ -101,7 +149,8 @@ handle_envelope() {
     flock -x 8
 
     local reply rc=0
-    reply="$(printf '%s' "$text" | backend_reply "$slug" "$conv_key" "$stem")" || rc=$?
+    reply="$(printf '%s' "$text" |
+      backend_reply "$slug" "$conv_key" "$stem" "$media_rel" "$media_type" "$media_mime")" || rc=$?
 
     if ((rc == 124)); then
       log_error "[$stem] backend timed out"
