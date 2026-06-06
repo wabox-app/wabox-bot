@@ -23,3 +23,7 @@ assert_plugin() {
 @test "plugin openai-whisper has a runnable transcribe.sh and a README" {
   assert_plugin openai-whisper
 }
+
+@test "plugin vosk has a runnable transcribe.sh and a README" {
+  assert_plugin vosk
+}
