@@ -38,6 +38,8 @@ load_core() {
   source "$LIB_DIR/outbox.sh"
   # shellcheck source=lib/workdir.sh
   source "$LIB_DIR/workdir.sh"
+  # shellcheck source=lib/media.sh
+  source "$LIB_DIR/media.sh"
   # shellcheck source=lib/backend.sh
   source "$LIB_DIR/backend.sh"
   # shellcheck source=lib/migrate.sh

@@ -48,6 +48,11 @@ PID_LOCK="$STATE_DIR/wabox-bot.lock"
 GROUP_PER_PARTICIPANT="${GROUP_PER_PARTICIPANT:-0}"
 IGNORE_FROM_ME="${IGNORE_FROM_ME:-1}"
 KEEP_PROCESSED="${KEEP_PROCESSED:-1}"
+# Pluggable speech-to-text for inbound audio. WABOX_TRANSCRIBE_CMD is
+# word-split and the audio file path is appended as its final argument; the
+# transcript is read from stdout. Empty ⇒ audio messages are ignored.
+WABOX_TRANSCRIBE_CMD="${WABOX_TRANSCRIBE_CMD:-}"
+WABOX_TRANSCRIBE_TIMEOUT="${WABOX_TRANSCRIBE_TIMEOUT:-120}"
 # Generic shutdown drain timeout — how long to give in-flight handlers to
 # finish on SIGTERM/SIGINT before escalating. Should be at least as long as
 # the longest backend reply timeout.
