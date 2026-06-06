@@ -53,7 +53,8 @@ handle_slash_command() {
       local status_text
       status_text="Status:
 conv:    $conv_key
-backend: $(backend_name)"
+backend: $(backend_name)
+workdir: $(workdir_display "$slug")"
       if declare -f backend_status_lines >/dev/null; then
         status_text+="
 $(backend_status_lines "$slug")"
@@ -66,6 +67,7 @@ $(backend_status_lines "$slug")"
       local help_text="Available commands:
 /clear           forget this conversation and start fresh
 /status          show session id, model, mode, system prompt
+/cwd <path>      set this conversation's working folder (/cwd default to reset)
 /ping            quick liveness check"
       if declare -f backend_help >/dev/null; then
         help_text+="
@@ -75,6 +77,64 @@ $(backend_help)"
 /help            show this message"
       reply_path="$(write_outbox "$to" "$help_text" "$id" "$stem")"
       log_info "[$stem] /help → $reply_path"
+      return 0
+      ;;
+    /cwd)
+      if [[ -z "$cmd_args" ]]; then
+        reply_path="$(write_outbox "$to" \
+          "Working folder: $(workdir_display "$slug")
+Usage:
+  /cwd <path>     set this conversation's working folder (absolute or ~)
+  /cwd default    revert to the auto per-conversation folder" \
+          "$id" "$stem")"
+        log_info "[$stem] /cwd (show) → $reply_path"
+        return 0
+      fi
+      if [[ "$cmd_args" == "default" || "$cmd_args" == "clear" ]]; then
+        (
+          exec 8>"$LOCKS_DIR/$slug.lock"
+          flock -x 8
+          rm -f -- "$(conversation_dir "$slug")/workdir"
+        )
+        reply_path="$(write_outbox "$to" \
+          "Working folder reset to the auto per-conversation folder." \
+          "$id" "$stem")"
+        log_info "[$stem] /cwd default → $reply_path"
+        return 0
+      fi
+      local cwd_path
+      cwd_path="$(expand_tilde "$cmd_args")"
+      if [[ "$cwd_path" != /* ]]; then
+        reply_path="$(write_outbox "$to" \
+          "Working folder must be an absolute path or start with ~ (got: $cmd_args)." \
+          "$id" "$stem")"
+        log_warn "[$stem] /cwd rejected non-absolute path=$cmd_args → $reply_path"
+        return 0
+      fi
+      if [[ ! -e "$cwd_path" ]]; then
+        reply_path="$(write_outbox "$to" \
+          "No such directory: $cwd_path" \
+          "$id" "$stem")"
+        log_warn "[$stem] /cwd rejected missing dir=$cwd_path → $reply_path"
+        return 0
+      fi
+      if [[ ! -d "$cwd_path" ]]; then
+        reply_path="$(write_outbox "$to" \
+          "Not a directory: $cwd_path" \
+          "$id" "$stem")"
+        log_warn "[$stem] /cwd rejected non-dir=$cwd_path → $reply_path"
+        return 0
+      fi
+      (
+        exec 8>"$LOCKS_DIR/$slug.lock"
+        flock -x 8
+        mkdir -p "$(conversation_dir "$slug")"
+        printf '%s\n' "$cwd_path" >"$(conversation_dir "$slug")/workdir"
+      )
+      reply_path="$(write_outbox "$to" \
+        "Working folder for this conversation set to: $cwd_path" \
+        "$id" "$stem")"
+      log_info "[$stem] /cwd → $cwd_path → $reply_path"
       return 0
       ;;
     *)

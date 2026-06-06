@@ -83,3 +83,63 @@ Always reply in one paragraph." "$SLUG" "$JID" "$JID" "MSG" "stem"
   handle_slash_command "/foo" "$SLUG" "$JID" "$JID" "MSG" "stem"
   [ "$(jq -r '.text' "$WABOX_OUTBOX/stem.json")" = "Unknown command: /foo. Try /help." ]
 }
+
+@test "/cwd with no override reports the auto default folder" {
+  handle_slash_command "/cwd" "$SLUG" "$JID" "$JID" "MSG" "cwd1"
+  text="$(jq -r '.text' "$WABOX_OUTBOX/cwd1.json")"
+  [[ "$text" == *"work/$SLUG (default)"* ]]
+}
+
+@test "/cwd <existing dir> persists the expanded absolute path" {
+  mkdir -p "$TMPDIR_TEST/proj"
+  handle_slash_command "/cwd $TMPDIR_TEST/proj" "$SLUG" "$JID" "$JID" "MSG" "cwd2"
+  [ "$(cat "$(conversation_dir "$SLUG")/workdir")" = "$TMPDIR_TEST/proj" ]
+  text="$(jq -r '.text' "$WABOX_OUTBOX/cwd2.json")"
+  [[ "$text" == *"set to: $TMPDIR_TEST/proj"* ]]
+}
+
+@test "/cwd expands a leading tilde before persisting" {
+  mkdir -p "$HOME/wabox-bot-test-dir"
+  handle_slash_command "/cwd ~/wabox-bot-test-dir" "$SLUG" "$JID" "$JID" "MSG" "cwd3"
+  [ "$(cat "$(conversation_dir "$SLUG")/workdir")" = "$HOME/wabox-bot-test-dir" ]
+  rmdir "$HOME/wabox-bot-test-dir"
+}
+
+@test "/cwd default removes the override" {
+  mkdir -p "$(conversation_dir "$SLUG")"
+  printf '%s\n' "/srv/data" >"$(conversation_dir "$SLUG")/workdir"
+  handle_slash_command "/cwd default" "$SLUG" "$JID" "$JID" "MSG" "cwd4"
+  [ ! -e "$(conversation_dir "$SLUG")/workdir" ]
+}
+
+@test "/cwd rejects a relative path and persists nothing" {
+  handle_slash_command "/cwd some/rel/path" "$SLUG" "$JID" "$JID" "MSG" "cwd5"
+  text="$(jq -r '.text' "$WABOX_OUTBOX/cwd5.json")"
+  [[ "$text" == *"absolute path or start with ~"* ]]
+  [ ! -e "$(conversation_dir "$SLUG")/workdir" ]
+}
+
+@test "/cwd rejects a nonexistent directory" {
+  handle_slash_command "/cwd $TMPDIR_TEST/nope" "$SLUG" "$JID" "$JID" "MSG" "cwd6"
+  text="$(jq -r '.text' "$WABOX_OUTBOX/cwd6.json")"
+  [[ "$text" == *"No such directory: $TMPDIR_TEST/nope"* ]]
+  [ ! -e "$(conversation_dir "$SLUG")/workdir" ]
+}
+
+@test "/cwd rejects a path that is a file, not a directory" {
+  : >"$TMPDIR_TEST/afile"
+  handle_slash_command "/cwd $TMPDIR_TEST/afile" "$SLUG" "$JID" "$JID" "MSG" "cwd7"
+  text="$(jq -r '.text' "$WABOX_OUTBOX/cwd7.json")"
+  [[ "$text" == *"Not a directory: $TMPDIR_TEST/afile"* ]]
+  [ ! -e "$(conversation_dir "$SLUG")/workdir" ]
+}
+
+@test "/help lists /cwd" {
+  handle_slash_command "/help" "$SLUG" "$JID" "$JID" "MSG" "cwdhelp"
+  [[ "$(jq -r '.text' "$WABOX_OUTBOX/cwdhelp.json")" == *"/cwd"* ]]
+}
+
+@test "/status reports the working folder" {
+  handle_slash_command "/status" "$SLUG" "$JID" "$JID" "MSG" "cwdstatus"
+  [[ "$(jq -r '.text' "$WABOX_OUTBOX/cwdstatus.json")" == *"workdir: "* ]]
+}
