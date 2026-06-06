@@ -23,7 +23,9 @@ takes care of:
 - **Per-conversation working folder** — each conversation's agent runs in its
   own directory (auto `$STATE_DIR/work/<slug>` by default), so file operations
   stay isolated. Redirect one with `/cwd <path>` (e.g. `/cwd ~/Valter`);
-  `/cwd default` reverts.
+  `/cwd default` reverts. The Claude Code backend scopes its session to the
+  working folder, so changing `/cwd` starts a fresh agent session in the new
+  folder (Claude can't resume a session across directories).
 - **Per-conversation overrides** persisted to disk and surviving restarts.
 
 ## Install
