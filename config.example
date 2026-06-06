@@ -1,0 +1,54 @@
+# shellcheck shell=bash disable=SC2034
+# wabox-bot configuration.
+#
+# Copy to ~/.config/wabox-bot/config (or run: wabox-bot --init-config), then
+# edit. This file is sourced as bash at startup and every value is exported, so
+# the claude CLI and the plugins/*/transcribe.sh scripts inherit them.
+#
+# Precedence: a variable already set in your environment wins over this file
+# (the lines use the ${VAR:-default} form). Write a bare VAR=value if you want
+# this file to force a value regardless of the environment.
+
+# ── Core ─────────────────────────────────────────────────────────────────────
+WABOX_BOT_BACKEND="${WABOX_BOT_BACKEND:-claude-code}"     # backend in lib/backends/
+# Inbox/outbox default from `wabox status --json`; uncomment to pin them:
+# WABOX_INBOX="${WABOX_INBOX:-$HOME/.local/share/wabox/inbox}"
+# WABOX_OUTBOX="${WABOX_OUTBOX:-$HOME/.local/share/wabox/outbox}"
+# STATE_DIR="${STATE_DIR:-$HOME/.local/state/wabox-bot}"  # sessions + locks
+# PROCESSED_DIR="${PROCESSED_DIR:-$WABOX_INBOX/processed}"
+# LOG_FILE="${LOG_FILE:-$STATE_DIR/agent.log}"
+KEEP_PROCESSED="${KEEP_PROCESSED:-1}"                     # keep envelopes for audit
+IGNORE_FROM_ME="${IGNORE_FROM_ME:-1}"                    # skip fromMe=true
+GROUP_PER_PARTICIPANT="${GROUP_PER_PARTICIPANT:-0}"      # 1 = thread per person
+SHUTDOWN_DRAIN_TIMEOUT="${SHUTDOWN_DRAIN_TIMEOUT:-180}"  # seconds to drain on stop
+DEBUG="${DEBUG:-0}"                                      # 1 = verbose logging
+
+# ── Backend: claude-code ──────────────────────────────────────────────────────
+CLAUDE_BIN="${CLAUDE_BIN:-claude}"
+CLAUDE_ARGS="${CLAUDE_ARGS:---permission-mode auto}"
+CLAUDE_TIMEOUT="${CLAUDE_TIMEOUT:-180}"                  # seconds per turn
+# SYSTEM_PROMPT_FILE="${SYSTEM_PROMPT_FILE:-}"           # global system prompt file
+
+# ── Transcription (core) ──────────────────────────────────────────────────────
+# Point WABOX_TRANSCRIBE_CMD at a plugin to transcribe inbound audio; empty =
+# audio is ignored. See plugins/README.md.
+# WABOX_TRANSCRIBE_CMD="${WABOX_TRANSCRIBE_CMD:-$HOME/.local/share/wabox-bot/plugins/faster-whisper/transcribe.sh}"
+WABOX_TRANSCRIBE_TIMEOUT="${WABOX_TRANSCRIBE_TIMEOUT:-120}"
+WABOX_TRANSCRIBE_LANG="${WABOX_TRANSCRIBE_LANG:-}"       # e.g. pt; empty = auto-detect
+
+# ── Transcription plugins (set only the ones for your chosen plugin) ──────────
+# faster-whisper:
+# WABOX_FW_MODEL="${WABOX_FW_MODEL:-base}"
+# WABOX_FW_DEVICE="${WABOX_FW_DEVICE:-cpu}"
+# WABOX_FW_COMPUTE="${WABOX_FW_COMPUTE:-int8}"
+# whisper-cpp:
+# WABOX_WHISPERCPP_MODEL="${WABOX_WHISPERCPP_MODEL:-$HOME/.local/share/whisper/ggml-base.bin}"
+# WABOX_WHISPERCPP_BIN="${WABOX_WHISPERCPP_BIN:-whisper-cli}"
+# openai-whisper:
+# WABOX_OPENAI_WHISPER_MODEL="${WABOX_OPENAI_WHISPER_MODEL:-base}"
+# vosk:
+# WABOX_VOSK_MODEL="${WABOX_VOSK_MODEL:-$HOME/.local/share/vosk/model}"
+# openai-compatible (OpenAI, Groq, …):
+# WABOX_STT_API_KEY="${WABOX_STT_API_KEY:-}"
+# WABOX_STT_API_URL="${WABOX_STT_API_URL:-https://api.openai.com/v1/audio/transcriptions}"
+# WABOX_STT_API_MODEL="${WABOX_STT_API_MODEL:-whisper-1}"

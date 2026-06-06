@@ -5,6 +5,19 @@
 # check_dependencies(), which the entrypoint calls *after* lib/log.sh has
 # been sourced.
 
+# Load the user's config file first, so its values seed the resolution below
+# and are exported to subprocesses (the agent CLI, the transcription plugins).
+# Path precedence: --config flag (sets WABOX_BOT_CONFIG in the entrypoint) >
+# WABOX_BOT_CONFIG env > XDG default. The template uses the ${VAR:-default}
+# form, so a variable already set in the environment wins over the file.
+WABOX_BOT_CONFIG="${WABOX_BOT_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/wabox-bot/config}"
+if [[ -f "$WABOX_BOT_CONFIG" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$WABOX_BOT_CONFIG"
+  set +a
+fi
+
 # Try to pick up the user's actual wabox paths from `wabox status --json`
 # (falls back to platform defaults if wabox isn't on PATH).
 default_paths_from_wabox() {
@@ -73,4 +86,43 @@ check_dependencies() {
   need jq
   need flock
   need timeout
+}
+
+# Print effective configuration for diagnostics (--print-config). Lists the
+# resolved core variables plus every WABOX_*/CLAUDE_* var and SYSTEM_PROMPT_FILE
+# currently set (covers backend and plugin vars), minus internal/injected ones.
+# Secret-looking values are masked, and a var set to empty is distinguished from
+# one that is unset.
+_print_config_one() {
+  local name="$1" val
+  if [[ -z "${!name+x}" ]]; then
+    printf '%s=(unset)\n' "$name"
+    return
+  fi
+  val="${!name}"
+  case "$name" in
+    *KEY* | *TOKEN* | *SECRET*)
+      [[ -n "$val" ]] && val="(set)" || val="(empty)"
+      ;;
+    *)
+      [[ -n "$val" ]] || val="(empty)"
+      ;;
+  esac
+  printf '%s=%s\n' "$name" "$val"
+}
+
+print_config() {
+  local name
+  {
+    for name in WABOX_BOT_CONFIG WABOX_BOT_BACKEND WABOX_INBOX WABOX_OUTBOX \
+                STATE_DIR PROCESSED_DIR LOG_FILE KEEP_PROCESSED IGNORE_FROM_ME \
+                GROUP_PER_PARTICIPANT SHUTDOWN_DRAIN_TIMEOUT DEBUG \
+                "${!WABOX_@}" "${!CLAUDE_@}" SYSTEM_PROMPT_FILE; do
+      # Skip internal computed vars and env injected by the claude CLI itself.
+      case "$name" in
+        *_DEFAULT | WABOX_BOT_BACKEND_DIR | CLAUDE_CODE_*) continue ;;
+      esac
+      _print_config_one "$name"
+    done
+  } | sort -u
 }

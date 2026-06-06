@@ -8,6 +8,7 @@ the agent CLI you're plugging in.
 
 ```
 bin/wabox-bot           # entrypoint — argument parsing, sourcing, main loop
+config.example          # template for ~/.config/wabox-bot/config (--init-config)
 lib/                    # core modules, one named seam per file
 lib/backends/           # one .sh per backend; see docs/backends.md for the contract
 examples/               # systemd unit, stubs for additional backends
