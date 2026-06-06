@@ -11,13 +11,14 @@ bin/wabox-bot           # entrypoint — argument parsing, sourcing, main loop
 lib/                    # core modules, one named seam per file
 lib/backends/           # one .sh per backend; see docs/backends.md for the contract
 examples/               # systemd unit, stubs for additional backends
+plugins/                # ready-made WABOX_TRANSCRIBE_CMD transcribers, one folder each
 test/bats/              # bats tests; run with `bats test/bats/`
 docs/                   # reference docs (backend contract, migration guide)
 ```
 
 ## Local development
 
-- Lint with `shellcheck`: `shellcheck -x bin/wabox-bot lib/*.sh lib/backends/*.sh`
+- Lint with `shellcheck`: `shellcheck -x bin/wabox-bot lib/*.sh lib/backends/*.sh && shellcheck plugins/*/transcribe.sh`
 - Run tests with `bats`: `bats test/bats/`
 - The script is bash 4+ compatible; we test on bash 4.4, 5.0, 5.2 in CI.
 
