@@ -18,19 +18,25 @@ LIB_DIR="$ROOT/lib"
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [--backend <name>]
+Usage: $(basename "$0") [--backend <name>] [--config <path>]
+       $(basename "$0") --init-config | --print-config
 
 Options:
   --backend <name>    use this backend (overrides WABOX_BOT_BACKEND;
                       default: claude-code). Available backends are .sh
                       files in lib/backends/.
+  --config <path>     load this config file (overrides WABOX_BOT_CONFIG;
+                      default: \${XDG_CONFIG_HOME:-~/.config}/wabox-bot/config).
+  --init-config       write the config template to that path and exit.
+  --print-config      print effective config values (secrets masked) and exit.
   -h, --help          show this message and exit
 EOF
 }
 
-# Argument parsing. The CLI flag wins over the env var; both win over the
-# "claude-code" default in lib/backend.sh.
+# Argument parsing. Flags win over env vars; both win over built-in defaults.
 BACKEND_OVERRIDE=""
+CONFIG_OVERRIDE=""
+MODE="run"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --backend)
@@ -40,6 +46,23 @@ while [[ $# -gt 0 ]]; do
       ;;
     --backend=*)
       BACKEND_OVERRIDE="${1#--backend=}"
+      shift
+      ;;
+    --config)
+      [[ $# -ge 2 ]] || { printf 'wabox-bot: --config requires a value\n' >&2; exit 1; }
+      CONFIG_OVERRIDE="$2"
+      shift 2
+      ;;
+    --config=*)
+      CONFIG_OVERRIDE="${1#--config=}"
+      shift
+      ;;
+    --init-config)
+      MODE="init-config"
+      shift
+      ;;
+    --print-config)
+      MODE="print-config"
       shift
       ;;
     -h | --help)
@@ -53,6 +76,34 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+# Resolve the config path (flag > env > XDG default) so every mode agrees.
+if [[ -n "$CONFIG_OVERRIDE" ]]; then
+  WABOX_BOT_CONFIG="$CONFIG_OVERRIDE"
+fi
+WABOX_BOT_CONFIG="${WABOX_BOT_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/wabox-bot/config}"
+export WABOX_BOT_CONFIG
+
+# --init-config: install the template and exit (needs no libs or dependencies).
+if [[ "$MODE" == "init-config" ]]; then
+  if [[ -e "$WABOX_BOT_CONFIG" ]]; then
+    printf 'wabox-bot: config already exists: %s\n' "$WABOX_BOT_CONFIG" >&2
+    printf 'Remove it, or pass --config <path> to write elsewhere.\n' >&2
+    exit 1
+  fi
+  mkdir -p "$(dirname "$WABOX_BOT_CONFIG")"
+  cp -- "$ROOT/config.example" "$WABOX_BOT_CONFIG"
+  printf 'wrote %s\n' "$WABOX_BOT_CONFIG"
+  exit 0
+fi
+
+# A config named explicitly with --config must exist (the default path is
+# optional and silently ignored when absent).
+if [[ -n "$CONFIG_OVERRIDE" && ! -f "$WABOX_BOT_CONFIG" ]]; then
+  printf 'wabox-bot: config file not found: %s\n' "$WABOX_BOT_CONFIG" >&2
+  exit 1
+fi
+
 if [[ -n "$BACKEND_OVERRIDE" ]]; then
   WABOX_BOT_BACKEND="$BACKEND_OVERRIDE"
 fi

@@ -50,3 +50,20 @@ EOF
     [ "$KEEP_PROCESSED" = "1" ]
   )
 }
+
+@test "--init-config writes config.example to the target and refuses to overwrite" {
+  target="$TMPDIR_TEST/conf/config"
+  WABOX_BOT_CONFIG="$target" run "$REPO_ROOT/bin/wabox-bot" --init-config
+  [ "$status" -eq 0 ]
+  [ -f "$target" ]
+  diff "$target" "$REPO_ROOT/config.example"
+  # second run must refuse, leaving the file untouched
+  WABOX_BOT_CONFIG="$target" run "$REPO_ROOT/bin/wabox-bot" --init-config
+  [ "$status" -ne 0 ]
+}
+
+@test "--config naming a missing file is an error" {
+  run "$REPO_ROOT/bin/wabox-bot" --config "$TMPDIR_TEST/absent"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"not found"* ]]
+}
