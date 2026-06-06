@@ -5,6 +5,19 @@
 # check_dependencies(), which the entrypoint calls *after* lib/log.sh has
 # been sourced.
 
+# Load the user's config file first, so its values seed the resolution below
+# and are exported to subprocesses (the agent CLI, the transcription plugins).
+# Path precedence: --config flag (sets WABOX_BOT_CONFIG in the entrypoint) >
+# WABOX_BOT_CONFIG env > XDG default. The template uses the ${VAR:-default}
+# form, so a variable already set in the environment wins over the file.
+WABOX_BOT_CONFIG="${WABOX_BOT_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/wabox-bot/config}"
+if [[ -f "$WABOX_BOT_CONFIG" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$WABOX_BOT_CONFIG"
+  set +a
+fi
+
 # Try to pick up the user's actual wabox paths from `wabox status --json`
 # (falls back to platform defaults if wabox isn't on PATH).
 default_paths_from_wabox() {
