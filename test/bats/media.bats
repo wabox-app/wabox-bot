@@ -57,3 +57,9 @@ SH
   run media_transcribe "/some/audio.ogg"
   [ "$status" -ne 0 ]
 }
+
+@test "media_transcribe returns non-zero when WABOX_TRANSCRIBE_CMD is empty" {
+  WABOX_TRANSCRIBE_CMD=""
+  run media_transcribe "/some/audio.ogg"
+  [ "$status" -ne 0 ]
+}

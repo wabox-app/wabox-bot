@@ -12,8 +12,8 @@ media_mime_of() { jq -r '.media.mimetype // empty' <<<"$1"; }
 
 # Copy the media file into <workdir>/wabox-media/ and print the path relative
 # to <workdir> — the backend cd's there, so a relative path is what it needs.
-# The source is the copy already parked in $PROCESSED_DIR; we copy (not move)
-# so the processed/ audit trail is preserved. Returns non-zero if the source
+# The caller passes the path already moved to $PROCESSED_DIR; we copy (not move)
+# so the audit trail is preserved. Returns non-zero if the source
 # is missing.
 media_stage() {
   local src="$1" workdir="$2" name dest_dir
@@ -31,6 +31,7 @@ media_stage() {
 # status; the caller also treats empty output as a failure.
 media_transcribe() {
   local audio="$1"
+  [[ -n "$WABOX_TRANSCRIBE_CMD" ]] || return 1
   local -a cmd
   # shellcheck disable=SC2206 # intentional word-splitting of the user command
   cmd=($WABOX_TRANSCRIBE_CMD)
