@@ -18,7 +18,7 @@ wav="$(mktemp --suffix=.wav)"
 trap 'rm -f "$wav"' EXIT
 ffmpeg -nostdin -loglevel error -y -i "$audio" -ar 16000 -ac 1 -c:a pcm_s16le "$wav"
 
-exec python3 - "$wav" "$model" <<'PY'
+python3 - "$wav" "$model" <<'PY'
 import sys, json, wave
 from vosk import Model, KaldiRecognizer
 
