@@ -109,6 +109,10 @@ When your backend is sourced, the following are already in scope:
 | `STATE_DIR`, `SESSIONS_DIR`, `LOCKS_DIR`, `LOG_FILE`, `WABOX_OUTBOX` | The standard paths set by `lib/config.sh`. |
 | `SHUTDOWN_DRAIN_TIMEOUT` | Seconds the bot waits for in-flight backend calls on SIGTERM. Backends with longer replies should bump this. |
 
+These backend variables can also be set in the wabox-bot config file
+(`~/.config/wabox-bot/config`); it is sourced and exported before the backend
+loads, so values there reach the backend and any subprocess it spawns.
+
 ### Functions
 
 | Name | What |

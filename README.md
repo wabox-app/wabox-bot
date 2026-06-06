@@ -77,6 +77,23 @@ Send a WhatsApp message to the number paired with wabox. wabox-bot will pick
 it up, route it through `claude -p` with `--session-id` (resumed on each
 subsequent turn), and write the reply back to `outbox/`.
 
+## Configuration file
+
+All settings are environment variables; rather than exporting them by hand, put
+them in one file:
+
+```bash
+wabox-bot --init-config            # writes ~/.config/wabox-bot/config
+$EDITOR ~/.config/wabox-bot/config # edit values; lines you don't need stay as defaults
+wabox-bot                          # loads the file on startup
+```
+
+The file is sourced as bash and every value is exported, so the backend CLI and
+the transcription plugins inherit it. A variable set in your environment still
+wins over the file. Use `--config <path>` for an alternate file (or set
+`WABOX_BOT_CONFIG`), and `--print-config` to see the effective values (secrets
+masked). The variables themselves are listed below.
+
 ## Configuration
 
 | Env var | Default | Meaning |

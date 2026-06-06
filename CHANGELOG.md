@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`WABOX_TRANSCRIBE_CMD`, `WABOX_TRANSCRIBE_TIMEOUT`). Captions are included and
   media is staged under `<working-folder>/wabox-media/`. The `backend_reply`
   contract gains three optional media arguments.
+- Configuration file: all environment variables can live in one sourced file
+  (`~/.config/wabox-bot/config`, override with `--config`/`WABOX_BOT_CONFIG`),
+  exported to subprocesses. New flags `--init-config` (install the bundled
+  `config.example` template) and `--print-config` (show effective values, with
+  secrets masked). The environment still overrides file values.
 
 ## [0.1.1] - 2026-06-04
 
