@@ -122,6 +122,17 @@ fi
 source "$LIB_DIR/config.sh"
 # shellcheck source=lib/log.sh
 source "$LIB_DIR/log.sh"
+
+# --print-config: source the backend (for its defaults) and dump effective
+# values, then exit — before the dependency check, lock, and main loop, so it
+# works without the runtime binaries installed.
+if [[ "$MODE" == "print-config" ]]; then
+  # shellcheck source=lib/backend.sh
+  source "$LIB_DIR/backend.sh"
+  print_config
+  exit 0
+fi
+
 check_dependencies
 # shellcheck source=lib/locks.sh
 source "$LIB_DIR/locks.sh"

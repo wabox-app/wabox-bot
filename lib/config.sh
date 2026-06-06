@@ -87,3 +87,30 @@ check_dependencies() {
   need flock
   need timeout
 }
+
+# Print effective configuration for diagnostics (--print-config). Lists the
+# resolved core variables plus every WABOX_*/CLAUDE_* var and SYSTEM_PROMPT_FILE
+# currently set (covers backend and plugin vars). Secret-looking values are
+# masked so the output is safe to share.
+_print_config_one() {
+  local name="$1" val="${!1-}"
+  case "$name" in
+    *KEY* | *TOKEN* | *SECRET*)
+      if [[ -n "$val" ]]; then val="(set)"; else val="(unset)"; fi
+      ;;
+    *)
+      [[ -n "$val" ]] || val="(unset)"
+      ;;
+  esac
+  printf '%s=%s\n' "$name" "$val"
+}
+
+print_config() {
+  local name
+  for name in WABOX_BOT_CONFIG WABOX_BOT_BACKEND WABOX_INBOX WABOX_OUTBOX \
+              STATE_DIR PROCESSED_DIR LOG_FILE KEEP_PROCESSED IGNORE_FROM_ME \
+              GROUP_PER_PARTICIPANT SHUTDOWN_DRAIN_TIMEOUT \
+              "${!WABOX_@}" "${!CLAUDE_@}" SYSTEM_PROMPT_FILE; do
+    _print_config_one "$name"
+  done | sort -u
+}

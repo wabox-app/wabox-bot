@@ -67,3 +67,14 @@ EOF
   [ "$status" -ne 0 ]
   [[ "$output" == *"not found"* ]]
 }
+
+@test "--print-config prints effective values and masks secrets" {
+  export WABOX_BOT_BACKEND=echo
+  export WABOX_STT_API_KEY=supersecret
+  run env WABOX_BOT_CONFIG="$TMPDIR_TEST/none" \
+    "$REPO_ROOT/bin/wabox-bot" --print-config
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"WABOX_BOT_BACKEND=echo"* ]]
+  [[ "$output" == *"WABOX_STT_API_KEY=(set)"* ]]
+  [[ "$output" != *"supersecret"* ]]
+}
