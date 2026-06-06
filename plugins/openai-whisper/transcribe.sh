@@ -16,5 +16,5 @@ trap 'rm -rf "$tmp"' EXIT
 args=(--model "$model" --output_format txt --output_dir "$tmp" --fp16 False)
 [[ -n "$lang" ]] && args+=(--language "$lang")
 
-whisper "$audio" "${args[@]}" >/dev/null 2>&1
+whisper "$audio" "${args[@]}" >/dev/null
 cat "$tmp"/*.txt

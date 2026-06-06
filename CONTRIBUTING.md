@@ -18,7 +18,7 @@ docs/                   # reference docs (backend contract, migration guide)
 
 ## Local development
 
-- Lint with `shellcheck`: `shellcheck -x bin/wabox-bot lib/*.sh lib/backends/*.sh`
+- Lint with `shellcheck`: `shellcheck -x bin/wabox-bot lib/*.sh lib/backends/*.sh && shellcheck plugins/*/transcribe.sh`
 - Run tests with `bats`: `bats test/bats/`
 - The script is bash 4+ compatible; we test on bash 4.4, 5.0, 5.2 in CI.
 
