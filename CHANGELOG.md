@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Per-conversation working folder: each conversation runs its agent in its own
+  directory (auto `$STATE_DIR/work/<slug>` by default). New `/cwd <path>`
+  command redirects a conversation to a chosen folder (e.g. `~/Valter`);
+  `/cwd default` reverts. Shown in `/status`.
+
 ## [0.1.1] - 2026-06-04
 
 ### Fixed

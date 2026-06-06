@@ -109,6 +109,7 @@ When your backend is sourced, the following are already in scope:
 | `need <binary>` | Inside `backend_check_dependencies` — die early with a clear error if a binary isn't on `$PATH`. |
 | `write_outbox <to> <text> <reply_to_id> <stem>` | Atomically write a wabox outbox envelope. Used by `backend_handle_command` when the backend has its own commands. |
 | `backend_state_dir <slug>` | Returns (and `mkdir -p`'s) `$SESSIONS_DIR/<slug>/<backend>`. Always use this rather than computing the path yourself — keeps state per-backend so `/clear` doesn't wipe other backends' history. |
+| `conversation_workdir <slug>` | Returns (and `mkdir -p`'s) the conversation's working folder — the auto default `$STATE_DIR/work/<slug>`, or the path the user set with `/cwd`. Backends that run an agent in a directory should `cd` into this before invoking it, so file operations stay isolated per conversation. Do the `cd` inside a subshell so it doesn't leak across turns; `backend_reply` already runs inside one (it's called from a command substitution in `lib/inbox.sh`). |
 
 ## A minimal backend
 
