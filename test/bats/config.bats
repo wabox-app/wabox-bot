@@ -39,3 +39,14 @@ EOF
   load_core
   [ "$KEEP_PROCESSED" = "1" ]
 }
+
+@test "config.example sources cleanly and yields the documented defaults" {
+  ( set -euo pipefail
+    # shellcheck disable=SC1091
+    source "$REPO_ROOT/config.example"
+    [ "$WABOX_BOT_BACKEND" = "claude-code" ]
+    [ "$CLAUDE_TIMEOUT" = "180" ]
+    [ "$WABOX_TRANSCRIBE_TIMEOUT" = "120" ]
+    [ "$KEEP_PROCESSED" = "1" ]
+  )
+}
