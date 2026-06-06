@@ -77,4 +77,7 @@ EOF
   [[ "$output" == *"WABOX_BOT_BACKEND=echo"* ]]
   [[ "$output" == *"WABOX_STT_API_KEY=(set)"* ]]
   [[ "$output" != *"supersecret"* ]]
+  [[ "$output" == *"DEBUG="* ]]                       # core var listed
+  [[ "$output" != *"WABOX_INBOX_DEFAULT="* ]]         # internal var filtered out
+  [[ "$output" != *"WABOX_BOT_BACKEND_DIR="* ]]       # internal var filtered out
 }

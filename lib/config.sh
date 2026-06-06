@@ -90,16 +90,22 @@ check_dependencies() {
 
 # Print effective configuration for diagnostics (--print-config). Lists the
 # resolved core variables plus every WABOX_*/CLAUDE_* var and SYSTEM_PROMPT_FILE
-# currently set (covers backend and plugin vars). Secret-looking values are
-# masked so the output is safe to share.
+# currently set (covers backend and plugin vars), minus internal/injected ones.
+# Secret-looking values are masked, and a var set to empty is distinguished from
+# one that is unset.
 _print_config_one() {
-  local name="$1" val="${!1-}"
+  local name="$1" val
+  if [[ -z "${!name+x}" ]]; then
+    printf '%s=(unset)\n' "$name"
+    return
+  fi
+  val="${!name}"
   case "$name" in
     *KEY* | *TOKEN* | *SECRET*)
-      if [[ -n "$val" ]]; then val="(set)"; else val="(unset)"; fi
+      [[ -n "$val" ]] && val="(set)" || val="(empty)"
       ;;
     *)
-      [[ -n "$val" ]] || val="(unset)"
+      [[ -n "$val" ]] || val="(empty)"
       ;;
   esac
   printf '%s=%s\n' "$name" "$val"
@@ -107,10 +113,16 @@ _print_config_one() {
 
 print_config() {
   local name
-  for name in WABOX_BOT_CONFIG WABOX_BOT_BACKEND WABOX_INBOX WABOX_OUTBOX \
-              STATE_DIR PROCESSED_DIR LOG_FILE KEEP_PROCESSED IGNORE_FROM_ME \
-              GROUP_PER_PARTICIPANT SHUTDOWN_DRAIN_TIMEOUT \
-              "${!WABOX_@}" "${!CLAUDE_@}" SYSTEM_PROMPT_FILE; do
-    _print_config_one "$name"
-  done | sort -u
+  {
+    for name in WABOX_BOT_CONFIG WABOX_BOT_BACKEND WABOX_INBOX WABOX_OUTBOX \
+                STATE_DIR PROCESSED_DIR LOG_FILE KEEP_PROCESSED IGNORE_FROM_ME \
+                GROUP_PER_PARTICIPANT SHUTDOWN_DRAIN_TIMEOUT DEBUG \
+                "${!WABOX_@}" "${!CLAUDE_@}" SYSTEM_PROMPT_FILE; do
+      # Skip internal computed vars and env injected by the claude CLI itself.
+      case "$name" in
+        *_DEFAULT | WABOX_BOT_BACKEND_DIR | CLAUDE_CODE_*) continue ;;
+      esac
+      _print_config_one "$name"
+    done
+  } | sort -u
 }
