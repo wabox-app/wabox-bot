@@ -24,6 +24,9 @@ takes care of:
   own directory (auto `$STATE_DIR/work/<slug>` by default), so file operations
   stay isolated. Redirect one with `/cwd <path>` (e.g. `/cwd ~/Valter`);
   `/cwd default` reverts.
+- **Image & audio messages** — an image is handed to the agent to read; a voice
+  note is transcribed to text first via a pluggable command (`WABOX_TRANSCRIBE_CMD`).
+  Captions are included. Media is staged under `<working-folder>/wabox-media/`.
 - **Per-conversation overrides** persisted to disk and surviving restarts.
 
 ## Install
@@ -86,6 +89,8 @@ subsequent turn), and write the reply back to `outbox/`.
 | `IGNORE_FROM_ME` | `1` | Skip envelopes where `fromMe=true`. |
 | `GROUP_PER_PARTICIPANT` | `0` | If `1`, each person in a group gets a separate thread. |
 | `DEBUG` | `0` | Verbose logging. |
+| `WABOX_TRANSCRIBE_CMD` | (empty) | Speech-to-text command for inbound audio; the audio path is appended as the last argument, transcript read from stdout. Empty ⇒ audio is ignored. |
+| `WABOX_TRANSCRIBE_TIMEOUT` | `120` | Max seconds for the transcription command. |
 
 Backend-specific env vars (for example `CLAUDE_BIN`, `CLAUDE_ARGS`,
 `CLAUDE_TIMEOUT`) are documented in `docs/backends.md`.
