@@ -43,9 +43,34 @@ cc_session_id_for() {
   [[ -s "$f" ]] && cat "$f"
 }
 
+# Persist the session id together with the working directory it was created
+# in. Claude scopes sessions to the cwd (sessions live under
+# ~/.claude/projects/<cwd-hash>/), so --resume only works from that same
+# directory; we record the cwd to enforce that in cc_resumable_session.
 cc_save_session_id() {
-  local slug="$1" sid="$2"
-  printf '%s\n' "$sid" >"$(backend_state_dir "$slug")/session"
+  local slug="$1" sid="$2" workdir="$3" d
+  d="$(backend_state_dir "$slug")"
+  printf '%s\n' "$sid" >"$d/session"
+  printf '%s\n' "$workdir" >"$d/session.cwd"
+}
+
+cc_session_cwd_for() {
+  local f
+  f="$(backend_state_dir "$1")/session.cwd"
+  [[ -s "$f" ]] && cat "$f"
+}
+
+# Echo the resumable session id (rc 0) only when a session exists AND it was
+# created in $workdir. Resuming from a different cwd fails with "No
+# conversation found with session ID" — so otherwise echo nothing and return
+# 1, and the caller starts a fresh session in the current directory. Sessions
+# predating this (no recorded cwd) are treated as non-resumable for safety.
+cc_resumable_session() {
+  local slug="$1" workdir="$2" sid cwd
+  sid="$(cc_session_id_for "$slug" || true)"
+  cwd="$(cc_session_cwd_for "$slug" || true)"
+  [[ -n "$sid" && "$cwd" == "$workdir" ]] || return 1
+  printf '%s' "$sid"
 }
 
 cc_model_for() {
@@ -107,7 +132,7 @@ backend_reply() {
   fi
 
   local sid_existing sid
-  sid_existing="$(cc_session_id_for "$slug" || true)"
+  sid_existing="$(cc_resumable_session "$slug" "$workdir" || true)"
 
   local -a cmd=("$CLAUDE_BIN")
   # shellcheck disable=SC2206 # intentional word-splitting of CLAUDE_ARGS
@@ -154,7 +179,7 @@ backend_reply() {
   local sid_returned
   sid_returned="$(jq -r '.session_id // empty' <<<"$response_json" 2>/dev/null || true)"
   [[ -n "$sid_returned" ]] && sid="$sid_returned"
-  cc_save_session_id "$slug" "$sid"
+  cc_save_session_id "$slug" "$sid" "$workdir"
 
   jq -r '.result // empty' <<<"$response_json" 2>/dev/null || true
 }
@@ -162,8 +187,9 @@ backend_reply() {
 # ---- /clear, /help, /status hooks ------------------------------------------
 
 backend_clear() {
-  local slug="$1"
-  rm -f -- "$(backend_state_dir "$slug")/session"
+  local slug="$1" d
+  d="$(backend_state_dir "$slug")"
+  rm -f -- "$d/session" "$d/session.cwd"
 }
 
 backend_help() {
