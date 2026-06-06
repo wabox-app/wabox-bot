@@ -17,8 +17,13 @@ takes care of:
 - **Single-instance locking** so two daemons can't fight over the same inbox.
 - **Per-conversation locking** so messages from one sender process in order
   while different senders run in parallel.
-- **Slash commands** (`/clear`, `/status`, `/ping`, `/help`, plus backend-owned
-  ones like `/model`, `/mode`, `/system` for the Claude Code backend).
+- **Slash commands** (`/clear`, `/status`, `/ping`, `/help`, `/cwd`, plus
+  backend-owned ones like `/model`, `/mode`, `/system` for the Claude Code
+  backend).
+- **Per-conversation working folder** — each conversation's agent runs in its
+  own directory (auto `$STATE_DIR/work/<slug>` by default), so file operations
+  stay isolated. Redirect one with `/cwd <path>` (e.g. `/cwd ~/Valter`);
+  `/cwd default` reverts.
 - **Per-conversation overrides** persisted to disk and surviving restarts.
 
 ## Install
