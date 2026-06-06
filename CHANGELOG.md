@@ -12,7 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Per-conversation working folder: each conversation runs its agent in its own
   directory (auto `$STATE_DIR/work/<slug>` by default). New `/cwd <path>`
   command redirects a conversation to a chosen folder (e.g. `~/Valter`);
-  `/cwd default` reverts. Shown in `/status`.
+  `/cwd default` reverts. Shown in `/status`. The Claude Code backend records
+  the working folder a session was created in and only resumes from that same
+  folder — changing `/cwd` starts a fresh session, since Claude Code scopes
+  sessions to the working directory and cannot resume one across directories.
 - Image and audio message processing. Image messages are handed to the agent to
   read; audio (voice notes) are transcribed to text via a pluggable command
   (`WABOX_TRANSCRIBE_CMD`, `WABOX_TRANSCRIBE_TIMEOUT`). Captions are included and

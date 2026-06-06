@@ -23,7 +23,9 @@ takes care of:
 - **Per-conversation working folder** — each conversation's agent runs in its
   own directory (auto `$STATE_DIR/work/<slug>` by default), so file operations
   stay isolated. Redirect one with `/cwd <path>` (e.g. `/cwd ~/Valter`);
-  `/cwd default` reverts.
+  `/cwd default` reverts. The Claude Code backend scopes its session to the
+  working folder, so changing `/cwd` starts a fresh agent session in the new
+  folder (Claude can't resume a session across directories).
 - **Image & audio messages** — an image is handed to the agent to read; a voice
   note is transcribed to text first via a pluggable command (`WABOX_TRANSCRIBE_CMD`).
   Captions are included. Media is staged under `<working-folder>/wabox-media/`.
