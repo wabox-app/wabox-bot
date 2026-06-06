@@ -15,3 +15,7 @@ assert_plugin() {
 @test "plugin faster-whisper has a runnable transcribe.sh and a README" {
   assert_plugin faster-whisper
 }
+
+@test "plugin whisper-cpp has a runnable transcribe.sh and a README" {
+  assert_plugin whisper-cpp
+}
