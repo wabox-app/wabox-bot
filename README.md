@@ -92,6 +92,10 @@ subsequent turn), and write the reply back to `outbox/`.
 | `WABOX_TRANSCRIBE_CMD` | (empty) | Speech-to-text command for inbound audio; the audio path is appended as the last argument, transcript read from stdout. Empty ⇒ audio is ignored. |
 | `WABOX_TRANSCRIBE_TIMEOUT` | `120` | Max seconds for the transcription command. |
 
+Ready-made transcribers for `WABOX_TRANSCRIBE_CMD` (faster-whisper, whisper.cpp,
+OpenAI Whisper, Vosk, and any OpenAI-compatible API such as Groq) live in
+[`plugins/`](plugins/) — each with its own install and configuration README.
+
 Backend-specific env vars (for example `CLAUDE_BIN`, `CLAUDE_ARGS`,
 `CLAUDE_TIMEOUT`) are documented in `docs/backends.md`.
 

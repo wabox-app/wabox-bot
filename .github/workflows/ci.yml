@@ -19,6 +19,7 @@ jobs:
           shellcheck lib/backends/*.sh
           shellcheck install.sh
           shellcheck examples/aider.sh
+          shellcheck plugins/*/transcribe.sh
 
   bats:
     runs-on: ubuntu-latest
