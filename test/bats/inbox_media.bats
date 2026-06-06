@@ -87,3 +87,53 @@ SH
   handle_envelope "$WABOX_INBOX/$stem.json"
   [ ! -f "$WABOX_OUTBOX/$stem.json" ]
 }
+
+@test "transcription failure sends the error reply to the outbox" {
+  cat >"$TMPDIR_TEST/failing_stt.sh" <<'SH'
+#!/usr/bin/env bash
+exit 1
+SH
+  chmod +x "$TMPDIR_TEST/failing_stt.sh"
+  export WABOX_TRANSCRIBE_CMD="$TMPDIR_TEST/failing_stt.sh"
+  stem="20260101-000006_x_GGGG"
+  mk_envelope "$stem" \
+    "$(jq -nc --arg j "$JID" --arg f "$stem.ogg" \
+       '{id:"M7",from:$j,text:"",media:{type:"audio",file:$f,mimetype:"audio/ogg"}}')" \
+    "$stem.ogg"
+  handle_envelope "$WABOX_INBOX/$stem.json"
+  [ -f "$WABOX_OUTBOX/$stem.json" ]
+  [[ "$(jq -r '.text' "$WABOX_OUTBOX/$stem.json")" == *"transcrever"* ]]
+}
+
+@test "whitespace-only transcript triggers the error reply, not an empty turn" {
+  cat >"$TMPDIR_TEST/blank_stt.sh" <<'SH'
+#!/usr/bin/env bash
+printf '   '
+SH
+  chmod +x "$TMPDIR_TEST/blank_stt.sh"
+  export WABOX_TRANSCRIBE_CMD="$TMPDIR_TEST/blank_stt.sh"
+  stem="20260101-000007_x_HHHH"
+  mk_envelope "$stem" \
+    "$(jq -nc --arg j "$JID" --arg f "$stem.ogg" \
+       '{id:"M8",from:$j,text:"",media:{type:"audio",file:$f,mimetype:"audio/ogg"}}')" \
+    "$stem.ogg"
+  handle_envelope "$WABOX_INBOX/$stem.json"
+  [[ "$(jq -r '.text' "$WABOX_OUTBOX/$stem.json")" == *"transcrever"* ]]
+}
+
+@test "audio with a caption prepends the caption to the transcript" {
+  cat >"$TMPDIR_TEST/fake_stt.sh" <<'SH'
+#!/usr/bin/env bash
+printf 'ola mundo'
+SH
+  chmod +x "$TMPDIR_TEST/fake_stt.sh"
+  export WABOX_TRANSCRIBE_CMD="$TMPDIR_TEST/fake_stt.sh"
+  stem="20260101-000008_x_IIII"
+  mk_envelope "$stem" \
+    "$(jq -nc --arg j "$JID" --arg f "$stem.ogg" \
+       '{id:"M9",from:$j,text:"listen to this",media:{type:"audio",file:$f,mimetype:"audio/ogg"}}')" \
+    "$stem.ogg"
+  handle_envelope "$WABOX_INBOX/$stem.json"
+  expected="echo: listen to this"$'\n\n'"ola mundo"
+  [ "$(jq -r '.text' "$WABOX_OUTBOX/$stem.json")" = "$expected" ]
+}

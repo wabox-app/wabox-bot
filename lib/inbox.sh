@@ -102,7 +102,7 @@ handle_envelope() {
         fi
         local transcript trc=0
         transcript="$(media_transcribe "$workdir/$media_rel")" || trc=$?
-        if ((trc != 0)) || [[ -z "$transcript" ]]; then
+        if ((trc != 0)) || [[ -z "${transcript//[[:space:]]/}" ]]; then
           log_error "[$stem] transcription failed (rc=$trc)"
           write_outbox "$to" "(Não consegui transcrever o áudio.)" "$id" "$stem" >/dev/null
           return 0
