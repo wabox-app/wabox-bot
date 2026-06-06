@@ -103,7 +103,7 @@ cc_compose_prompt() {
 
 # ---- The Claude turn -------------------------------------------------------
 
-# backend_reply(slug, conv_key, stem) — stdin = user text, stdout = reply.
+# backend_reply(slug, conv_key, stem [, media_path [, media_type]]) — stdin = user text, stdout = reply.
 # Exit: 0 ok, 124 timed out, anything else = error (caller substitutes a
 # user-visible error message).
 backend_reply() {
