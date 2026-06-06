@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   directory (auto `$STATE_DIR/work/<slug>` by default). New `/cwd <path>`
   command redirects a conversation to a chosen folder (e.g. `~/Valter`);
   `/cwd default` reverts. Shown in `/status`.
+- Image and audio message processing. Image messages are handed to the agent to
+  read; audio (voice notes) are transcribed to text via a pluggable command
+  (`WABOX_TRANSCRIBE_CMD`, `WABOX_TRANSCRIBE_TIMEOUT`). Captions are included and
+  media is staged under `<working-folder>/wabox-media/`. The `backend_reply`
+  contract gains three optional media arguments.
 
 ## [0.1.1] - 2026-06-04
 

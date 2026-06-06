@@ -84,13 +84,31 @@ cc_save_system_for() {
   printf '%s' "$prompt" >"$(backend_state_dir "$slug")/system"
 }
 
+# Compose the prompt fed to claude on stdin. With an image we prepend a short
+# instruction pointing the agent at the staged file (relative to its cwd),
+# then the caption. Any other media type (audio is already transcribed into
+# text upstream) passes the text through unchanged.
+cc_compose_prompt() {
+  local text="$1" media_path="$2" media_type="$3"
+  if [[ "$media_type" == "image" && -n "$media_path" ]]; then
+    if [[ -n "$text" ]]; then
+      printf 'The user sent an image at %s — view it and respond.\n\n%s' "$media_path" "$text"
+    else
+      printf 'The user sent an image at %s — view it and respond.' "$media_path"
+    fi
+  else
+    printf '%s' "$text"
+  fi
+}
+
 # ---- The Claude turn -------------------------------------------------------
 
-# backend_reply(slug, conv_key, stem) — stdin = user text, stdout = reply.
+# backend_reply(slug, conv_key, stem [, media_path [, media_type]]) — stdin = user text, stdout = reply.
 # Exit: 0 ok, 124 timed out, anything else = error (caller substitutes a
 # user-visible error message).
 backend_reply() {
   local slug="$1" conv_key="$2" stem="$3"
+  local media_path="${4:-}" media_type="${5:-}"
   local text
   text="$(cat)"
 
@@ -142,8 +160,10 @@ backend_reply() {
     log_info "[$stem] conv=$conv_key new session=$sid"
   fi
 
+  local prompt
+  prompt="$(cc_compose_prompt "$text" "$media_path" "$media_type")"
   local response_json rc=0
-  response_json="$(printf '%s' "$text" |
+  response_json="$(printf '%s' "$prompt" |
     timeout --kill-after=5 "$CLAUDE_TIMEOUT" "${cmd[@]}" 2>>"$LOG_FILE")" || rc=$?
 
   if ((rc != 0)); then

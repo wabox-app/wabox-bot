@@ -47,6 +47,14 @@ backend_reply() {
 }
 ```
 
+`backend_reply` may receive three optional trailing arguments —
+`backend_reply <slug> <conv_key> <stem> [media_path] [media_type] [media_mime]`.
+When the inbound message carries an image, `media_path` is the file's location
+**relative to the working folder** (the backend's cwd), `media_type` is
+`image`, and `media_mime` is its MIME type. Audio is transcribed upstream and
+arrives as plain text, so backends only ever see `image` here. Backends that
+don't handle media simply ignore these arguments.
+
 ### Optional
 
 ```bash
