@@ -94,6 +94,18 @@ backend_reply() {
   local text
   text="$(cat)"
 
+  # Run this turn in the conversation's working folder so the agent's file
+  # operations stay isolated per conversation. We're already inside the
+  # command-substitution subshell that captures backend_reply's output (see
+  # lib/inbox.sh), so this cd is scoped to this one turn — no global CWD
+  # change, no races between concurrent conversations.
+  local workdir
+  workdir="$(conversation_workdir "$slug")"
+  if ! cd "$workdir"; then
+    log_error "[$stem] cannot cd to working folder $workdir"
+    return 1
+  fi
+
   local sid_existing sid
   sid_existing="$(cc_session_id_for "$slug" || true)"
 
