@@ -14,6 +14,7 @@ either set `WABOX_BOT_BACKEND=<name>` in the environment or pass
 | Name | Required env | What it does |
 | --- | --- | --- |
 | `claude-code` (default) | `CLAUDE_BIN` on `$PATH` (default: `claude`) | Drives `claude -p --output-format json` with `--session-id` / `--resume` so every WhatsApp conversation gets its own persistent Claude session. Owns the `/model`, `/mode`, `/system` slash commands. |
+| `agy` | `AGY_BIN` on `$PATH` (default: `agy`), Antigravity logged in | Drives Google's Antigravity coding agent (`agy` print mode). An *autonomous* agent: with `--dangerously-skip-permissions` (the default `AGY_ARGS`) it reads files, runs commands, and edits code in the conversation's working folder. agy's `--continue` is global, so each conversation is pinned to an explicit id captured from agy's `--log-file` and resumed with `--conversation`. Prepends a concise-answer instruction (`AGY_REPLY_PREFIX`) since print mode otherwise narrates every step. Owns the `/model` slash command. |
 | `echo` | none | Replies `echo: <text>` to every message. Useful for smoke-testing the loop without involving an LLM. |
 
 ## The contract

@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `agy` backend, driving Google's Antigravity coding agent (`agy` print mode)
+  as an autonomous agent over WhatsApp: with `--dangerously-skip-permissions`
+  it reads files, runs commands, and edits code in the conversation's working
+  folder. Because agy's `--continue` is global, each conversation is pinned to
+  an explicit conversation id captured from agy's `--log-file` and resumed via
+  `--conversation` (stale ids self-heal). Prepends a concise-answer instruction
+  (`AGY_REPLY_PREFIX`) to suppress agy's step-by-step narration. Owns `/model`
+  (validated against `agy models`). Tunables: `AGY_BIN`, `AGY_ARGS`,
+  `AGY_TIMEOUT`.
 - Per-conversation working folder: each conversation runs its agent in its own
   directory (auto `$STATE_DIR/work/<slug>` by default). New `/cwd <path>`
   command redirects a conversation to a chosen folder (e.g. `~/Valter`);
