@@ -20,6 +20,23 @@ teardown() {
   done
 }
 
+@test "bob backend defines required + optional contract functions" {
+  WABOX_BOT_BACKEND=bob load_core
+  for fn in backend_name backend_reply backend_handle_command \
+            backend_clear backend_help backend_status_lines \
+            backend_check_dependencies; do
+    declare -f "$fn" >/dev/null || {
+      echo "missing: $fn" >&2
+      false
+    }
+  done
+}
+
+@test "bob backend identifies as bob" {
+  WABOX_BOT_BACKEND=bob load_core
+  [ "$(backend_name)" = "bob" ]
+}
+
 @test "echo backend defines only the minimum contract" {
   WABOX_BOT_BACKEND=echo load_core
   declare -f backend_name >/dev/null
