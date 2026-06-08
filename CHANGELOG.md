@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `bob` backend, driving IBM's Bob Shell CLI (`bob -o json`). Each conversation
+  gets its own thread via Bob's per-project `--resume latest` (which lines up
+  with wabox-bot's per-conversation working folders). Defaults to `--yolo` and
+  `--chat-mode advanced`; owns `/model` (→ `-m`) and `/mode` (→ `--chat-mode`,
+  validated against `plan`/`code`/`advanced`/`ask`). Auth via `BOBSHELL_API_KEY`.
+
 - Per-conversation working folder: each conversation runs its agent in its own
   directory (auto `$STATE_DIR/work/<slug>` by default). New `/cwd <path>`
   command redirects a conversation to a chosen folder (e.g. `~/Valter`);

@@ -14,6 +14,7 @@ either set `WABOX_BOT_BACKEND=<name>` in the environment or pass
 | Name | Required env | What it does |
 | --- | --- | --- |
 | `claude-code` (default) | `CLAUDE_BIN` on `$PATH` (default: `claude`) | Drives `claude -p --output-format json` with `--session-id` / `--resume` so every WhatsApp conversation gets its own persistent Claude session. Owns the `/model`, `/mode`, `/system` slash commands. |
+| `bob` | `BOB_BIN` on `$PATH` (default: `bob`), `jq`, `BOBSHELL_API_KEY` set | Drives IBM's Bob Shell with `bob -o json`. Each WhatsApp conversation gets its own thread via Bob's per-project `--resume latest` (sessions are keyed on the working folder, which wabox-bot already isolates per conversation). Defaults to `--yolo --chat-mode advanced` (override via `BOB_ARGS`); owns the `/model` and `/mode` slash commands. |
 | `echo` | none | Replies `echo: <text>` to every message. Useful for smoke-testing the loop without involving an LLM. |
 
 ## The contract
