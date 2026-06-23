@@ -67,12 +67,25 @@ teardown() {
   [ "$(jq -r '.denials[0].tool_name' <<<"$pending")" = "Write" ]
 }
 
-@test "cc_format_permission_message shows the agent explanation, tool bullet, and ask" {
-  json="{\"result\":\"I want to create hello.txt\",\"permission_denials\":$DENIALS}"
-  run cc_format_permission_message "$json" "$DENIALS"
-  [[ "$output" == *"I want to create hello.txt"* ]]
+@test "cc_format_permission_message lists each denied tool with its salient arg and the ask" {
+  run cc_format_permission_message "$DENIALS"
+  [[ "$output" == *"⚠️ *Claude precisa de permissão*"* ]]
   [[ "$output" == *"• *Write* — /tmp/hello.txt"* ]]
-  [[ "$output" == *"Responda *sim*"* ]]
+  [[ "$output" == *"Responda *sim* para autorizar ou *não* para cancelar."* ]]
+  # the agent's free-text result is deliberately dropped — keep it objective
+  [[ "$output" != *"result"* ]]
+}
+
+@test "cc_format_permission_message collapses a multi-line command onto one line" {
+  d='[{"tool_name":"Bash","tool_use_id":"t","tool_input":{"command":"mkdir -p ~/tmp &&\nprintf x > ~/tmp/a.txt"}}]'
+  run cc_format_permission_message "$d"
+  [[ "$output" == *"• *Bash* — mkdir -p ~/tmp && printf x > ~/tmp/a.txt"* ]]
+}
+
+@test "cc_format_permission_message shows a bare tool when it has no salient arg" {
+  d='[{"tool_name":"Skill","tool_use_id":"t","tool_input":{}}]'
+  run cc_format_permission_message "$d"
+  [[ "$output" == *"• *Skill*"* ]]
 }
 
 # ---- response handling -----------------------------------------------------

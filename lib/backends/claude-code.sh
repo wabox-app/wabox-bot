@@ -269,29 +269,28 @@ cc_emit_or_park() {
   denials="$(jq -c '.permission_denials // []' <<<"$response_json" 2>/dev/null || echo '[]')"
   if [[ -n "$denials" && "$denials" != "[]" ]]; then
     cc_save_pending_permission "$slug" "$prompt" "$denials" "$(date +%s)"
-    cc_format_permission_message "$response_json" "$denials"
+    cc_format_permission_message "$denials"
     return 0
   fi
   jq -r '.result // empty' <<<"$response_json" 2>/dev/null || true
 }
 
-# Format the WhatsApp prompt for a blocked turn: the agent's own explanation
-# (it usually says what it wanted), one bullet per denied tool with its most
-# salient argument, then the yes/no ask.
+# Format the WhatsApp prompt for a blocked turn: header, one concise bullet per
+# denied tool (its salient argument, whitespace collapsed so a multi-line
+# command stays on one line), then the yes/no ask. We deliberately drop the
+# agent's free-text `.result` — it tends to ramble — and let the tool list be
+# the objective statement of exactly what's about to run.
 cc_format_permission_message() {
-  local response_json="$1" denials="$2"
-  local explanation tools
-  explanation="$(jq -r '.result // empty' <<<"$response_json" 2>/dev/null || true)"
+  local denials="$1"
+  local tools
   tools="$(jq -r '
     [ .[] | "• *\(.tool_name)*"
       + ( ( .tool_input.command // .tool_input.file_path // .tool_input.path
-            // .tool_input.url // .tool_input.pattern // "" )
+            // .tool_input.url // .tool_input.pattern // .tool_input.skill // "" )
+          | gsub("[[:space:]]+"; " ")
           | if . == "" then "" else " — \(.)" end ) ]
     | join("\n")' <<<"$denials" 2>/dev/null || true)"
-  printf '⚠️ *Claude precisa de permissão*\n'
-  [[ -n "$explanation" ]] && printf '\n%s\n' "$explanation"
-  printf '\nFerramentas pendentes:\n%s\n' "$tools"
-  printf '\nResponda *sim* para autorizar ou *não* para cancelar.'
+  printf '⚠️ *Claude precisa de permissão*\n\n%s\n\nResponda *sim* para autorizar ou *não* para cancelar.' "$tools"
 }
 
 # The user just answered a parked permission. Interpret yes/no, then: on yes,
