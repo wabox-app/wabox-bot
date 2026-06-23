@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Permission requests over WhatsApp (claude-code backend). Running in
+  `--permission-mode default` (now the default `CLAUDE_ARGS`), any tool the
+  agent isn't pre-allowed to run surfaces as a `permission_denials` entry in
+  the turn's JSON instead of being silently auto-approved. The backend parks
+  the turn, asks you over WhatsApp ("⚠️ Claude precisa de permissão… responda
+  *sim*/*não*"), and on approval resumes the *same* session granting exactly
+  the denied tools (`--allowedTools`) so the agent carries on from where it
+  stopped — `não` cancels, an unrecognised reply re-asks, and a parked request
+  expires after `CC_PERMISSION_TIMEOUT` (default 600s, after which the next
+  message is treated as a fresh prompt). A resumed turn that hits a *new*
+  denial parks again, so the flow chains. `/clear` drops any parked request and
+  `/status` flags one. Fully contained in the backend — no core changes.
+
 - `bob` backend, driving IBM's Bob Shell CLI (`bob -o json`). Each conversation
   gets its own thread via Bob's per-project `--resume latest` (which lines up
   with wabox-bot's per-conversation working folders). Defaults to `--yolo` and
@@ -40,6 +53,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exported to subprocesses. New flags `--init-config` (install the bundled
   `config.example` template) and `--print-config` (show effective values, with
   secrets masked). The environment still overrides file values.
+
+### Changed
+
+- Default `CLAUDE_ARGS` is now `--permission-mode default` (was
+  `--permission-mode auto`), which activates the permission-over-WhatsApp flow
+  above. Set `CLAUDE_ARGS=--permission-mode auto` (or `acceptEdits` /
+  `bypassPermissions`, or `/mode auto` per conversation) to keep the agent
+  running unattended; pre-allow routine tools in `~/.claude/settings.json` so
+  `default` only asks for the genuinely sensitive ones.
 
 ## [0.1.1] - 2026-06-04
 

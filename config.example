@@ -25,8 +25,12 @@ DEBUG="${DEBUG:-0}"                                      # 1 = verbose logging
 
 # ── Backend: claude-code ──────────────────────────────────────────────────────
 CLAUDE_BIN="${CLAUDE_BIN:-claude}"
-CLAUDE_ARGS="${CLAUDE_ARGS:---permission-mode auto}"
+# `default` surfaces permission requests to you over WhatsApp (the bot asks
+# "sim/não" and resumes once you approve). Use `auto`/`acceptEdits`/
+# `bypassPermissions` to let the agent run unattended (the ask-flow stays off).
+CLAUDE_ARGS="${CLAUDE_ARGS:---permission-mode default}"
 CLAUDE_TIMEOUT="${CLAUDE_TIMEOUT:-180}"                  # seconds per turn
+CC_PERMISSION_TIMEOUT="${CC_PERMISSION_TIMEOUT:-600}"    # secs a parked permission stays answerable
 # SYSTEM_PROMPT_FILE="${SYSTEM_PROMPT_FILE:-}"           # global system prompt file
 
 # ── Transcription (core) ──────────────────────────────────────────────────────

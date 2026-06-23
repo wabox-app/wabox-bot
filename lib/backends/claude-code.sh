@@ -18,9 +18,18 @@
 # Backend-specific env defaults. Users can still override any of these via
 # their shell environment — these are only consulted if the var is unset.
 CLAUDE_BIN="${CLAUDE_BIN:-claude}"
-CLAUDE_ARGS="${CLAUDE_ARGS:---permission-mode auto}"
+# `default` (not `auto`) so tool uses Claude isn't pre-allowed to run surface
+# as `permission_denials` in the JSON instead of being silently auto-approved.
+# That's what drives the ask-over-WhatsApp flow below; with `auto`/`acceptEdits`/
+# `bypassPermissions` nothing is denied and the flow stays dormant. Routine
+# tools can still be pre-allowed via ~/.claude/settings.json so `default` only
+# asks for the genuinely sensitive ones.
+CLAUDE_ARGS="${CLAUDE_ARGS:---permission-mode default}"
 CLAUDE_TIMEOUT="${CLAUDE_TIMEOUT:-180}"
 SYSTEM_PROMPT_FILE="${SYSTEM_PROMPT_FILE:-}"
+# How long a parked permission request stays answerable. After this many
+# seconds the next message is treated as a fresh prompt, not a yes/no answer.
+CC_PERMISSION_TIMEOUT="${CC_PERMISSION_TIMEOUT:-600}"
 
 backend_name() {
   printf 'claude-code\n'
@@ -109,6 +118,58 @@ cc_save_system_for() {
   printf '%s' "$prompt" >"$(backend_state_dir "$slug")/system"
 }
 
+# ---- Pending-permission state ----------------------------------------------
+#
+# When a turn ends with the agent blocked on a tool it wasn't allowed to use,
+# we park the turn: store what was denied + the prompt that triggered it, ask
+# the user over WhatsApp, and pick the answer up on the *next* message. All of
+# this lives in one JSON file in the conversation's backend state dir and is
+# only ever touched inside the per-conversation flock (backend_reply already
+# runs under it), so no extra locking is needed.
+
+cc_pending_permission_path() {
+  printf '%s/pending_permission.json' "$(backend_state_dir "$1")"
+}
+
+# Save the parked turn. `denials` is the raw `.permission_denials` JSON array
+# from the run, stored verbatim so we can both describe it to the user and
+# recover the exact tool names to grant on approval.
+cc_save_pending_permission() {
+  local slug="$1" original_prompt="$2" denials="$3" now="$4"
+  jq -n \
+    --arg p "$original_prompt" \
+    --argjson d "$denials" \
+    --argjson t "$now" \
+    '{original_prompt: $p, denials: $d, asked_at: $t}' \
+    >"$(cc_pending_permission_path "$slug")"
+}
+
+cc_load_pending_permission() {
+  cat -- "$(cc_pending_permission_path "$1")"
+}
+
+cc_clear_pending_permission() {
+  rm -f -- "$(cc_pending_permission_path "$1")"
+}
+
+# 0 if a *fresh* pending permission exists, 1 otherwise. An expired one (older
+# than CC_PERMISSION_TIMEOUT) is cleared here and reported as absent, so the
+# incoming message falls through and is handled as an ordinary new prompt — the
+# user has clearly moved on.
+cc_has_pending_permission() {
+  local f
+  f="$(cc_pending_permission_path "$1")"
+  [[ -s "$f" ]] || return 1
+  local asked_at now
+  asked_at="$(jq -r '.asked_at // 0' <"$f" 2>/dev/null || echo 0)"
+  now="$(date +%s)"
+  if ((now - asked_at > CC_PERMISSION_TIMEOUT)); then
+    cc_clear_pending_permission "$1"
+    return 1
+  fi
+  return 0
+}
+
 # Compose the prompt fed to claude on stdin. With an image we prepend a short
 # instruction pointing the agent at the staged file (relative to its cwd),
 # then the caption. Any other media type (audio is already transcribed into
@@ -128,26 +189,16 @@ cc_compose_prompt() {
 
 # ---- The Claude turn -------------------------------------------------------
 
-# backend_reply(slug, conv_key, stem [, media_path [, media_type]]) — stdin = user text, stdout = reply.
-# Exit: 0 ok, 124 timed out, anything else = error (caller substitutes a
-# user-visible error message).
-backend_reply() {
-  local slug="$1" conv_key="$2" stem="$3"
-  local media_path="${4:-}" media_type="${5:-}"
-  local text
-  text="$(cat)"
-
-  # Run this turn in the conversation's working folder so the agent's file
-  # operations stay isolated per conversation. We're already inside the
-  # command-substitution subshell that captures backend_reply's output (see
-  # lib/inbox.sh), so this cd is scoped to this one turn — no global CWD
-  # change, no races between concurrent conversations.
-  local workdir
-  workdir="$(conversation_workdir "$slug")"
-  if ! cd "$workdir"; then
-    log_error "[$stem] cannot cd to working folder $workdir"
-    return 1
-  fi
+# Run one Claude turn in $workdir and echo its raw response JSON on stdout.
+# Returns claude's exit code (0 ok, 124 timed out, other = error); on a
+# non-zero code nothing is echoed. `extra_allowed`, when non-empty, is
+# word-split into `--allowedTools` — that's how an approved permission grants
+# exactly the tools the user just said yes to, for this one turn only.
+#
+# Carries the model/mode/system overrides and the session resume/create logic
+# so both the normal path and the approval path go through the same invocation.
+cc_run_turn() {
+  local slug="$1" conv_key="$2" stem="$3" workdir="$4" prompt="$5" extra_allowed="${6:-}"
 
   local sid_existing sid
   sid_existing="$(cc_resumable_session "$slug" "$workdir" || true)"
@@ -175,6 +226,12 @@ backend_reply() {
   if [[ -n "$system_override" ]]; then
     cmd+=(--append-system-prompt "$system_override")
   fi
+  if [[ -n "$extra_allowed" ]]; then
+    # Tool names come from `.permission_denials[].tool_name` — bare identifiers
+    # like `Write`/`Bash`, no shell metacharacters — so the split is safe.
+    # shellcheck disable=SC2206
+    cmd+=(--allowedTools $extra_allowed)
+  fi
   if [[ -n "$sid_existing" ]]; then
     cmd+=(--resume "$sid_existing")
     sid="$sid_existing"
@@ -185,12 +242,9 @@ backend_reply() {
     log_info "[$stem] conv=$conv_key new session=$sid"
   fi
 
-  local prompt
-  prompt="$(cc_compose_prompt "$text" "$media_path" "$media_type")"
   local response_json rc=0
   response_json="$(printf '%s' "$prompt" |
     timeout --kill-after=5 "$CLAUDE_TIMEOUT" "${cmd[@]}" 2>>"$LOG_FILE")" || rc=$?
-
   if ((rc != 0)); then
     return "$rc"
   fi
@@ -201,7 +255,138 @@ backend_reply() {
   [[ -n "$sid_returned" ]] && sid="$sid_returned"
   cc_save_session_id "$slug" "$sid" "$workdir"
 
+  printf '%s' "$response_json"
+}
+
+# Given a completed turn's response JSON, either return the agent's result text
+# or — if it was blocked on a tool — park a pending permission and return the
+# yes/no question to send the user. `prompt` is stored so the approval path can
+# resume with context. Used by both the normal and the approval paths, so a
+# resumed turn that hits a *new* denial parks again (the flow chains naturally).
+cc_emit_or_park() {
+  local slug="$1" prompt="$2" response_json="$3"
+  local denials
+  denials="$(jq -c '.permission_denials // []' <<<"$response_json" 2>/dev/null || echo '[]')"
+  if [[ -n "$denials" && "$denials" != "[]" ]]; then
+    cc_save_pending_permission "$slug" "$prompt" "$denials" "$(date +%s)"
+    cc_format_permission_message "$response_json" "$denials"
+    return 0
+  fi
   jq -r '.result // empty' <<<"$response_json" 2>/dev/null || true
+}
+
+# Format the WhatsApp prompt for a blocked turn: the agent's own explanation
+# (it usually says what it wanted), one bullet per denied tool with its most
+# salient argument, then the yes/no ask.
+cc_format_permission_message() {
+  local response_json="$1" denials="$2"
+  local explanation tools
+  explanation="$(jq -r '.result // empty' <<<"$response_json" 2>/dev/null || true)"
+  tools="$(jq -r '
+    [ .[] | "• *\(.tool_name)*"
+      + ( ( .tool_input.command // .tool_input.file_path // .tool_input.path
+            // .tool_input.url // .tool_input.pattern // "" )
+          | if . == "" then "" else " — \(.)" end ) ]
+    | join("\n")' <<<"$denials" 2>/dev/null || true)"
+  printf '⚠️ *Claude precisa de permissão*\n'
+  [[ -n "$explanation" ]] && printf '\n%s\n' "$explanation"
+  printf '\nFerramentas pendentes:\n%s\n' "$tools"
+  printf '\nResponda *sim* para autorizar ou *não* para cancelar.'
+}
+
+# The user just answered a parked permission. Interpret yes/no, then: on yes,
+# resume the session granting exactly the denied tools and let the agent carry
+# on; on no, drop it; on anything else, keep the pending state and re-ask.
+cc_handle_permission_response() {
+  local slug="$1" conv_key="$2" stem="$3" workdir="$4" user_text="$5"
+
+  local pending
+  pending="$(cc_load_pending_permission "$slug")"
+
+  # Normalise: lowercase, strip surrounding whitespace.
+  local norm
+  norm="$(printf '%s' "$user_text" | tr '[:upper:]' '[:lower:]')"
+  norm="${norm#"${norm%%[![:space:]]*}"}"
+  norm="${norm%"${norm##*[![:space:]]}"}"
+
+  local approved
+  case "$norm" in
+    sim | s | yes | y | ok | pode | claro | autoriza | autorizo | aprova | aprovo | confirma | confirmo | 👍)
+      approved=1 ;;
+    não | nao | n | no | nega | nego | cancela | cancelo | recusa | recuso | 👎)
+      approved=0 ;;
+    *)
+      # Unrecognised — leave the pending state in place and ask again.
+      log_info "[$stem] permission response not understood: '$user_text'"
+      printf 'Não entendi. Responda *sim* para autorizar ou *não* para cancelar.'
+      return 0
+      ;;
+  esac
+
+  cc_clear_pending_permission "$slug"
+
+  if ((!approved)); then
+    log_info "[$stem] permission denied by user for conv=$conv_key"
+    printf 'Ok, cancelado. O Claude não vai executar essa ação.'
+    return 0
+  fi
+
+  # Approved: grant exactly the tools that were denied, resume the parked
+  # session, and tell the agent to proceed. The original prompt is kept only
+  # as data (stored/echoed), never re-executed as a command.
+  local allowed
+  allowed="$(jq -r '[.denials[].tool_name] | unique | join(" ")' <<<"$pending" 2>/dev/null || true)"
+  log_info "[$stem] permission granted by user; resuming with allowedTools=[$allowed]"
+
+  local response_json rc=0
+  response_json="$(cc_run_turn "$slug" "$conv_key" "$stem" "$workdir" \
+    'O usuário autorizou. Pode prosseguir com a ação que você havia solicitado.' \
+    "$allowed")" || rc=$?
+  if ((rc != 0)); then
+    return "$rc"
+  fi
+
+  cc_emit_or_park "$slug" "$user_text" "$response_json"
+}
+
+# backend_reply(slug, conv_key, stem [, media_path [, media_type]]) — stdin = user text, stdout = reply.
+# Exit: 0 ok, 124 timed out, anything else = error (caller substitutes a
+# user-visible error message).
+backend_reply() {
+  local slug="$1" conv_key="$2" stem="$3"
+  local media_path="${4:-}" media_type="${5:-}"
+  local text
+  text="$(cat)"
+
+  # Run this turn in the conversation's working folder so the agent's file
+  # operations stay isolated per conversation. We're already inside the
+  # command-substitution subshell that captures backend_reply's output (see
+  # lib/inbox.sh), so this cd is scoped to this one turn — no global CWD
+  # change, no races between concurrent conversations.
+  local workdir
+  workdir="$(conversation_workdir "$slug")"
+  if ! cd "$workdir"; then
+    log_error "[$stem] cannot cd to working folder $workdir"
+    return 1
+  fi
+
+  # If we parked a permission request on the previous turn, this message is the
+  # user's answer to it — not a fresh prompt. (Expired pendings are cleared by
+  # cc_has_pending_permission and fall through to the normal path below.)
+  if cc_has_pending_permission "$slug"; then
+    cc_handle_permission_response "$slug" "$conv_key" "$stem" "$workdir" "$text"
+    return $?
+  fi
+
+  local prompt
+  prompt="$(cc_compose_prompt "$text" "$media_path" "$media_type")"
+  local response_json rc=0
+  response_json="$(cc_run_turn "$slug" "$conv_key" "$stem" "$workdir" "$prompt")" || rc=$?
+  if ((rc != 0)); then
+    return "$rc"
+  fi
+
+  cc_emit_or_park "$slug" "$prompt" "$response_json"
 }
 
 # ---- /clear, /help, /status hooks ------------------------------------------
@@ -209,7 +394,9 @@ backend_reply() {
 backend_clear() {
   local slug="$1" d
   d="$(backend_state_dir "$slug")"
-  rm -f -- "$d/session" "$d/session.cwd"
+  # Also drop any parked permission — a cleared conversation has no turn to
+  # resume into, so a stale yes/no answer would have nowhere to go.
+  rm -f -- "$d/session" "$d/session.cwd" "$d/pending_permission.json"
 }
 
 backend_help() {
@@ -235,11 +422,16 @@ backend_status_lines() {
   else
     system_info="(set, ${#system_now} chars)"
   fi
+  local pending_info="(none)"
+  if cc_has_pending_permission "$slug"; then
+    pending_info="awaiting your *sim*/*não*"
+  fi
   cat <<EOF
 session: ${sid_now:-(none — next message starts fresh)}
 model:   ${model_now:-(default)}
 mode:    ${mode_now:-(default)}
 system:  $system_info
+pending: $pending_info
 EOF
 }
 
