@@ -41,6 +41,20 @@ expand_tilde() {
   esac
 }
 
+# Machine-readable sibling of workdir_display for `wabox-bot state`. Prints two
+# lines — "true"/"false" (is it the auto default?) then the path — and, like
+# workdir_display and unlike conversation_workdir, does NOT create the directory
+# (state is a read-only command).
+workdir_info() {
+  local slug="$1" file
+  file="$(conversation_dir "$slug")/workdir"
+  if [[ -s "$file" ]]; then
+    printf 'false\n%s' "$(cat -- "$file")"
+  else
+    printf 'true\n%s' "$STATE_DIR/work/$slug"
+  fi
+}
+
 # Human-readable "path (default|override)" for /status and /cwd show. Unlike
 # conversation_workdir, this does NOT create the directory.
 workdir_display() {

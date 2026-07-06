@@ -46,3 +46,20 @@ We follow [Conventional Commits](https://www.conventionalcommits.org/) (`fix`,
 Changelog entries live in [`CHANGELOG.md`](CHANGELOG.md) under the
 `[Unreleased]` section, following the
 [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/) format.
+
+## Releasing
+
+The version reported by `wabox-bot --version` (and the `daemon.wabox_bot_version`
+field of `wabox-bot state --json`) comes from the `VERSION` file at the repo
+root — that file is the single source of truth. Keep it, the CHANGELOG, and the
+git tag in lockstep. To cut version `X.Y.Z`:
+
+1. Write `X.Y.Z` into `VERSION` (bump per [SemVer](https://semver.org/): a new
+   feature ⇒ minor, a bug fix ⇒ patch).
+2. In `CHANGELOG.md`, rename `[Unreleased]` to `[X.Y.Z] - <date>` and add a fresh
+   empty `[Unreleased]` above it; update the compare links at the bottom.
+3. Commit (`chore(release): vX.Y.Z`) and tag: `git tag vX.Y.Z && git push --tags`.
+
+The `install.sh` one-liner pins clones to a branch/tag, so the `VERSION` file in
+the checkout is exactly what `--version` reports on an installed copy; when run
+from a git checkout, `--version` also appends the short commit for dev builds.

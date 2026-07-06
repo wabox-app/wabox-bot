@@ -92,7 +92,8 @@ The file is sourced as bash and every value is exported, so the backend CLI and
 the transcription plugins inherit it. A variable set in your environment still
 wins over the file. Use `--config <path>` for an alternate file (or set
 `WABOX_BOT_CONFIG`), and `--print-config` to see the effective values (secrets
-masked). The variables themselves are listed below.
+masked). Check the installed release with `wabox-bot --version` (or `-v`). The
+variables themselves are listed below.
 
 ## Configuration
 
@@ -126,6 +127,37 @@ Backend-specific env vars (for example `CLAUDE_BIN`, `CLAUDE_ARGS`,
 | `echo` | built-in | Echoes the user's text back. Useful for smoke-testing the loop. |
 
 Adding your own backend is a single bash file. See `docs/backends.md`.
+
+## External tooling
+
+Two read-only / client verbs form a stable, versioned contract so tools (such
+as a TUI) can observe and act on the daemon without parsing `$STATE_DIR`
+internals:
+
+```bash
+wabox-bot state --json          # snapshot of the daemon + every conversation
+wabox-bot answer <slug> <yes|no> # answer a conversation's parked permission
+```
+
+- `state --json` prints one JSON object: a top-level `"version": 1` (the schema
+  version — bump on a breaking change; consumers should hard-fail on a higher
+  major), a `daemon` block (`running`, `pid`, `wabox_bot_version`, `backend`,
+  and the resolved paths), and a `conversations` array sorted by last activity
+  (newest first). Each
+  conversation carries its `slug`, `conv_key`, `workdir`, lock state, last
+  message, and the backend's view (session id, overrides, and any parked
+  permission request). It takes no locks a running daemon would contend for.
+- `answer <slug> <yes|no>` answers a parked permission the same way replying
+  `sim`/`não` over WhatsApp would, and the reply still lands in the chat. It
+  takes the per-conversation lock (not the single-instance lock), so it
+  serializes against an in-flight turn.
+
+Exit codes: `0` ok · `2` no fresh pending permission · `3` conversation lock
+busy · `4` backend doesn't support answering · `1` usage/other. Both verbs pick
+their backend and config from `WABOX_BOT_BACKEND` / `WABOX_BOT_CONFIG` (env or
+the default config file). The two backend hooks behind them
+(`backend_state_json`, `backend_answer_permission`) are optional and documented
+in `docs/backends.md`.
 
 ## Migrating from `wabox/examples/wabox-claude-code.sh`
 

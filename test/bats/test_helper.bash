@@ -26,6 +26,8 @@ teardown_lib() {
 # Source the production core into the test shell. Honors $WABOX_BOT_BACKEND
 # so individual tests can pick which backend to load.
 load_core() {
+  # shellcheck source=lib/version.sh
+  source "$LIB_DIR/version.sh"
   # shellcheck source=lib/config.sh
   source "$LIB_DIR/config.sh"
   # shellcheck source=lib/log.sh

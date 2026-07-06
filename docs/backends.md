@@ -98,6 +98,44 @@ backend_status_lines() {
   # "backend:". The core dispatcher already prints both.
   printf 'session: %s\n' "$(my_session_for "$1")"
 }
+
+backend_state_json() {
+  # Args: slug
+  # Echo a JSON object with your backend's view of a conversation, for
+  # `wabox-bot state --json`. The shape is fixed:
+  #   {
+  #     "session_id": <string|null>,
+  #     "overrides":  { "model": <string|null>,
+  #                     "mode":  <string|null>,
+  #                     "system":<string|null> },
+  #     "pending_permission": <object|null>
+  #   }
+  # Return null for anything you don't track. If you never park a permission
+  # request, always emit "pending_permission": null. When you do, use whatever
+  # object shape your tooling needs (claude-code emits
+  #   { asked_at, expires_at, tools: [..], question: ".." }).
+  # Missing hook ⇒ core fills all of these with null. Assemble with `jq -n`;
+  # invalid JSON is discarded and replaced with the null default.
+  jq -n --arg sid "$(my_session_for "$1")" \
+    '{session_id: (if $sid == "" then null else $sid end),
+      overrides: {model: null, mode: null, system: null},
+      pending_permission: null}'
+}
+
+backend_answer_permission() {
+  # Args: slug, conv_key, decision ("yes" | "no")
+  # Answer a parked permission request from the `wabox-bot answer` CLI verb,
+  # through the same path a WhatsApp reply would take. Called under the
+  # per-conversation flock (answer_main already holds it), so no extra locking.
+  # Echo the reply text on stdout — the core delivers it to the chat.
+  # Exit code:
+  #   0    — answered (reply on stdout); may re-park if a new denial appears
+  #   2    — nothing fresh to answer (no pending permission)
+  #   any  — error
+  # Missing hook ⇒ `answer` exits 4 (backend doesn't support it).
+  cc_has_pending_permission "$1" || return 2
+  ...
+}
 ```
 
 ## What you can rely on

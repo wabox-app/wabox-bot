@@ -7,7 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-06
+
 ### Added
+
+- `wabox-bot --version` (alias `-v`) prints the installed version, sourced from
+  the new `VERSION` file at the repo root — the single source of truth for
+  releases (kept in lockstep with the CHANGELOG and the git tag; see
+  CONTRIBUTING.md → Releasing). When run from a git checkout, `--version` also
+  appends the short commit for dev builds. The version is logged at daemon
+  startup and exposed to tooling as `daemon.wabox_bot_version` in
+  `wabox-bot state --json`.
+- `wabox-bot state --json` — a read-only, versioned (`"version": 1`) JSON
+  snapshot of the daemon and every conversation, as the stable contract for
+  external tooling (first consumer: wabox-tui). Reports daemon liveness + PID
+  (via a non-blocking probe of the single-instance lock), and per conversation
+  its `conv_key`, working folder, lock state, last message, and the backend's
+  view (session id, overrides, and any *fresh* parked permission with its
+  tools, question, and expiry). Takes no locks a running daemon would contend
+  for. Backed by an optional `backend_state_json` hook (claude-code implements
+  it; missing hook ⇒ core fills those fields with `null`).
+- `wabox-bot answer <slug> <yes|no>` — answer a conversation's parked
+  permission request from the CLI, through the same path a WhatsApp `sim`/`não`
+  reply takes; the reply still lands in the chat. Takes the per-conversation
+  lock (not the single-instance lock). Exit codes: `0` ok · `2` nothing
+  pending · `3` lock busy · `4` backend unsupported · `1` usage. Backed by an
+  optional `backend_answer_permission` hook.
+- The loop now persists `$SESSIONS_DIR/<slug>/conv_key` (the one-way
+  slug↔conv_key mapping) and `last_message.json` (`{at, direction, text_preview}`,
+  inbound only for now) on every handled envelope, so `state` can enumerate and
+  sort conversations without scanning `processed/`.
+- The daemon writes its PID into the single-instance lock file after acquiring
+  it, so `state` can report it.
 
 - Permission requests over WhatsApp (claude-code backend). Running in
   `--permission-mode default` (now the default `CLAUDE_ARGS`), any tool the
@@ -99,6 +130,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `install.sh` one-liner: clones to `~/.local/share/wabox-bot`, symlinks
   `bin/wabox-bot` into `~/.local/bin/`.
 
-[Unreleased]: https://github.com/wabox-app/wabox-bot/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/wabox-app/wabox-bot/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/wabox-app/wabox-bot/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/wabox-app/wabox-bot/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/wabox-app/wabox-bot/releases/tag/v0.1.0

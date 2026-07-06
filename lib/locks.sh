@@ -11,11 +11,20 @@ INOTIFY_PID=""
 declare -A CHILDREN=()
 
 acquire_single_instance_lock() {
-  exec 9>"$PID_LOCK"
+  # Append-open (not truncate-open) so merely *attempting* to start a second
+  # daemon can't wipe the running daemon's PID out of the lock file before
+  # flock even reports the conflict.
+  exec 9>>"$PID_LOCK"
   if ! flock -n 9; then
     log_error "another wabox-bot agent is already running (lock: $PID_LOCK)"
     exit 1
   fi
+  # We own the lock now. Record our PID so `wabox-bot state` can report it —
+  # truncate first (the file may carry a stale PID from a crashed run), then
+  # write. fd 9 is in append mode, so the write lands at offset 0 after the
+  # truncate. flock keeps fd 9 open for our whole lifetime.
+  : >"$PID_LOCK"
+  printf '%s\n' "$$" >&9
 }
 
 reap_children() {

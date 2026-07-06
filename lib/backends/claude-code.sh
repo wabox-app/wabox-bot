@@ -434,6 +434,83 @@ pending: $pending_info
 EOF
 }
 
+# ---- state / answer hooks (wabox-bot state / answer) -----------------------
+
+# backend_state_json <slug> — echo this backend's view of a conversation for
+# `wabox-bot state`: {session_id, overrides:{model,mode,system},
+# pending_permission}. pending_permission is null unless a *fresh* request is
+# parked (the cc_has_pending_permission expiry rule also prunes expired ones);
+# when present it carries asked_at, expires_at (= asked_at + CC_PERMISSION_TIMEOUT),
+# the denied tool names, and the same WhatsApp question text the user was asked.
+backend_state_json() {
+  local slug="$1"
+  local sid model mode system
+  sid="$(cc_session_id_for "$slug" || true)"
+  model="$(cc_model_for "$slug" || true)"
+  mode="$(cc_mode_for "$slug" || true)"
+  system="$(cc_system_for "$slug" || true)"
+
+  local pending='null'
+  if cc_has_pending_permission "$slug"; then
+    local pj asked_at denials question
+    pj="$(cc_load_pending_permission "$slug")"
+    asked_at="$(jq -r '.asked_at // 0' <<<"$pj" 2>/dev/null || echo 0)"
+    denials="$(jq -c '.denials // []' <<<"$pj" 2>/dev/null || echo '[]')"
+    question="$(cc_format_permission_message "$denials")"
+    pending="$(jq -n \
+      --argjson asked_at "$asked_at" \
+      --argjson timeout "$CC_PERMISSION_TIMEOUT" \
+      --argjson denials "$denials" \
+      --arg question "$question" \
+      '{asked_at: $asked_at,
+        expires_at: ($asked_at + $timeout),
+        tools: [$denials[].tool_name],
+        question: $question}')"
+  fi
+
+  jq -n \
+    --arg sid "$sid" \
+    --arg model "$model" \
+    --arg mode "$mode" \
+    --arg system "$system" \
+    --argjson pending "$pending" \
+    '{
+      session_id: (if $sid == "" then null else $sid end),
+      overrides: {
+        model:  (if $model  == "" then null else $model  end),
+        mode:   (if $mode   == "" then null else $mode   end),
+        system: (if $system == "" then null else $system end)
+      },
+      pending_permission: $pending
+    }'
+}
+
+# backend_answer_permission <slug> <conv_key> <yes|no> — answer a parked
+# permission from the `answer` CLI verb, through the same code path a WhatsApp
+# "sim"/"não" would take. Runs under the per-conversation flock held by
+# answer_main. Exit 2 if nothing fresh is parked; otherwise echoes the reply
+# text (and re-parks if the resumed turn hits a new denial).
+backend_answer_permission() {
+  local slug="$1" conv_key="$2" decision="$3"
+  cc_has_pending_permission "$slug" || return 2
+
+  local synthetic
+  case "$decision" in
+    yes) synthetic="sim" ;;
+    no)  synthetic="não" ;;
+    *)   return 2 ;;
+  esac
+
+  # Resume in the conversation's working folder (claude scopes sessions to the
+  # cwd). We're inside answer_main's command-substitution subshell, so this cd
+  # is scoped to this one call and doesn't leak.
+  local workdir
+  workdir="$(conversation_workdir "$slug")"
+  cd "$workdir" || return 1
+
+  cc_handle_permission_response "$slug" "$conv_key" "answer-$(date +%s)" "$workdir" "$synthetic"
+}
+
 # ---- /model, /mode, /system dispatch ---------------------------------------
 
 # Return 99 from unrecognised commands so the core dispatcher falls through

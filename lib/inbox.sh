@@ -5,6 +5,32 @@
 # otherwise hands the user's text to the active backend's backend_reply
 # under a per-conversation flock.
 
+# Persist the slug↔conv_key mapping and a last-message record so
+# `wabox-bot state` can enumerate conversations and sort them by activity.
+# Written atomically (temp + rename) because two messages from the same sender
+# can be handled concurrently, before the per-conversation flock in step 6
+# serializes the backend call — a plain `>` could interleave into a corrupt
+# file. conv_key is idempotent (same content every time); last_message is a
+# fresh inbound record ({at, direction, text_preview}).
+persist_conversation_meta() {
+  local slug="$1" conv_key="$2" preview="$3"
+  local dir="$SESSIONS_DIR/$slug"
+  mkdir -p "$dir"
+
+  local ktmp="$dir/.conv_key.tmp.$$"
+  if printf '%s\n' "$conv_key" >"$ktmp" 2>/dev/null; then
+    mv -f -- "$ktmp" "$dir/conv_key" 2>/dev/null || rm -f -- "$ktmp"
+  fi
+
+  local mtmp="$dir/.last_message.tmp.$$"
+  if jq -n \
+    --argjson at "$(date +%s)" \
+    --arg text "$preview" \
+    '{at: $at, direction: "in", text_preview: $text}' >"$mtmp" 2>/dev/null; then
+    mv -f -- "$mtmp" "$dir/last_message.json" 2>/dev/null || rm -f -- "$mtmp"
+  fi
+}
+
 handle_envelope() {
   local in_path="$1"
   local in_name
@@ -78,6 +104,24 @@ handle_envelope() {
 
   conv_key="$(conversation_key "$envelope")"
   slug="$(key_slug "$conv_key")"
+
+  # ---- Step 4a: persist the slug↔conv_key mapping + a last-message record.
+  # Slugs are sha1(conv_key) — one-way — so this file is the only path back to
+  # the JID for `wabox-bot state`. We also record a lightweight last_message so
+  # state can list/sort conversations by activity without scanning processed/.
+  # The preview is the message text (audio hasn't been transcribed yet, so an
+  # audio/image without a caption records "[audio]"/"[image]"). Skipped only
+  # for a truly empty envelope (no text, no media).
+  local preview="" env_media_type
+  env_media_type="$(media_type_of "$envelope")"
+  if [[ -n "$text" ]]; then
+    preview="${text:0:120}"
+  elif [[ -n "$env_media_type" ]]; then
+    preview="[$env_media_type]"
+  fi
+  if [[ -n "$preview" ]]; then
+    persist_conversation_meta "$slug" "$conv_key" "$preview"
+  fi
 
   # ---- Step 4b: media handling ------------------------------------------
   # media_file was read in step 2 and the file moved to $PROCESSED_DIR in

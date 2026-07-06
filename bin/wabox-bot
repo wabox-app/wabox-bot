@@ -16,10 +16,31 @@ shopt -s nullglob
 ROOT="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
 LIB_DIR="$ROOT/lib"
 
+# Version resolution has no dependencies (no config, no log), so source it up
+# front — --version must work before any setup, and the subcommands + daemon
+# reuse wabox_bot_version too.
+# shellcheck source=lib/version.sh
+source "$LIB_DIR/version.sh"
+
+# --version output: the VERSION file value, plus the short git commit when we're
+# running from a checkout (dev builds). git is optional — its absence just drops
+# the suffix.
+print_version() {
+  local v commit
+  v="$(wabox_bot_version)"
+  if commit="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null)"; then
+    printf 'wabox-bot %s (%s)\n' "$v" "$commit"
+  else
+    printf 'wabox-bot %s\n' "$v"
+  fi
+}
+
 usage() {
   cat <<EOF
 Usage: $(basename "$0") [--backend <name>] [--config <path>]
        $(basename "$0") --init-config | --print-config
+       $(basename "$0") state --json
+       $(basename "$0") answer <slug> <yes|no>
 
 Options:
   --backend <name>    use this backend (overrides WABOX_BOT_BACKEND;
@@ -29,9 +50,54 @@ Options:
                       default: \${XDG_CONFIG_HOME:-~/.config}/wabox-bot/config).
   --init-config       write the config template to that path and exit.
   --print-config      print effective config values (secrets masked) and exit.
+  -v, --version       print the installed version and exit
   -h, --help          show this message and exit
+
+Subcommands (read-only / client verbs — see docs/backends.md):
+  state --json        print a versioned JSON snapshot of the daemon and every
+                      conversation, then exit.
+  answer <slug> <yes|no>
+                      answer a conversation's parked permission request from the
+                      CLI, exactly as replying "sim"/"não" over WhatsApp would.
 EOF
 }
+
+# Positional subcommands (state, answer) sit beside the flag modes. They are
+# clients of a (possibly running) daemon, not a second daemon: they load config
+# + backend read-only and never take the single-instance lock. Dispatched before
+# the flag parser so `wabox-bot state --json` works with the verb as $1. The
+# backend and config come from WABOX_BOT_BACKEND / WABOX_BOT_CONFIG (env or the
+# default config file); flags aren't parsed for subcommands.
+if [[ "${1:-}" == "state" || "${1:-}" == "answer" ]]; then
+  SUBCMD="$1"
+  shift
+  WABOX_BOT_CONFIG="${WABOX_BOT_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/wabox-bot/config}"
+  export WABOX_BOT_CONFIG
+  # shellcheck source=lib/config.sh
+  source "$LIB_DIR/config.sh"
+  # shellcheck source=lib/log.sh
+  source "$LIB_DIR/log.sh"
+  # shellcheck source=lib/outbox.sh
+  source "$LIB_DIR/outbox.sh"
+  # shellcheck source=lib/workdir.sh
+  source "$LIB_DIR/workdir.sh"
+  # shellcheck source=lib/backend.sh
+  source "$LIB_DIR/backend.sh"
+  case "$SUBCMD" in
+    state)
+      # shellcheck source=lib/state.sh
+      source "$LIB_DIR/state.sh"
+      state_cli "$@"
+      exit $?
+      ;;
+    answer)
+      # shellcheck source=lib/answer.sh
+      source "$LIB_DIR/answer.sh"
+      answer_main "$@"
+      exit $?
+      ;;
+  esac
+fi
 
 # Argument parsing. Flags win over env vars; both win over built-in defaults.
 BACKEND_OVERRIDE=""
@@ -64,6 +130,10 @@ while [[ $# -gt 0 ]]; do
     --print-config)
       MODE="print-config"
       shift
+      ;;
+    -v | --version)
+      print_version
+      exit 0
       ;;
     -h | --help)
       usage
@@ -133,6 +203,7 @@ if [[ "$MODE" == "print-config" ]]; then
   exit 0
 fi
 
+log_info "wabox-bot $(wabox_bot_version) starting"
 check_dependencies
 # shellcheck source=lib/locks.sh
 source "$LIB_DIR/locks.sh"
