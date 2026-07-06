@@ -130,13 +130,14 @@ Adding your own backend is a single bash file. See `docs/backends.md`.
 
 ## External tooling
 
-Two read-only / client verbs form a stable, versioned contract so tools (such
+Three read-only / client verbs form a stable, versioned contract so tools (such
 as a TUI) can observe and act on the daemon without parsing `$STATE_DIR`
 internals:
 
 ```bash
-wabox-bot state --json          # snapshot of the daemon + every conversation
-wabox-bot answer <slug> <yes|no> # answer a conversation's parked permission
+wabox-bot state --json               # snapshot of the daemon + every conversation
+wabox-bot transcript <slug> [--limit N]  # one conversation's message history
+wabox-bot answer <slug> <yes|no>     # answer a conversation's parked permission
 ```
 
 - `state --json` prints one JSON object: a top-level `"version": 1` (the schema
@@ -147,6 +148,14 @@ wabox-bot answer <slug> <yes|no> # answer a conversation's parked permission
   conversation carries its `slug`, `conv_key`, `workdir`, lock state, last
   message, and the backend's view (session id, overrides, and any parked
   permission request). It takes no locks a running daemon would contend for.
+- `transcript <slug> [--limit N]` prints one JSON object (`"version": 1`) with
+  the conversation's `turns` — inbound messages (from processed envelopes) and
+  outbound replies (from wabox-core's `outbox/sent` archive) merged and ordered
+  oldest-first, each with `at`, `direction`, `text`, and a `media` marker.
+  `total` is the full history size, `count` the number returned (last `--limit`,
+  default 200). Needs `KEEP_PROCESSED=1` for inbound history; `keep_processed`
+  reflects that. Like the other verbs it does the slug→conversation routing so
+  consumers never scan wabox's directories themselves.
 - `answer <slug> <yes|no>` answers a parked permission the same way replying
   `sim`/`não` over WhatsApp would, and the reply still lands in the chat. It
   takes the per-conversation lock (not the single-instance lock), so it

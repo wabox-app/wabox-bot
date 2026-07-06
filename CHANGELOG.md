@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-06
+
+### Added
+
+- `wabox-bot transcript <slug> [--limit N]` — a read-only, versioned
+  (`"version": 1`) JSON transcript of one conversation, extending the
+  `state`/`answer` client contract (first consumer: wabox-tui). Merges inbound
+  messages (from `PROCESSED_DIR` envelopes, needs `KEEP_PROCESSED=1`) with
+  outbound replies (from wabox-core's `outbox/sent` archive) into one
+  time-ordered `turns` array — each turn carrying `at`, `direction`, `text`, and
+  a `media` marker — with `total`/`count` and a `keep_processed` hint. Does the
+  slug→conversation routing itself (reading only the public envelope/outbox-job
+  formats), so tools never scan wabox's private layout. Takes no locks.
+
 ## [0.2.0] - 2026-07-06
 
 ### Added
@@ -130,7 +144,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `install.sh` one-liner: clones to `~/.local/share/wabox-bot`, symlinks
   `bin/wabox-bot` into `~/.local/bin/`.
 
-[Unreleased]: https://github.com/wabox-app/wabox-bot/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/wabox-app/wabox-bot/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/wabox-app/wabox-bot/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/wabox-app/wabox-bot/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/wabox-app/wabox-bot/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/wabox-app/wabox-bot/releases/tag/v0.1.0

@@ -40,6 +40,7 @@ usage() {
 Usage: $(basename "$0") [--backend <name>] [--config <path>]
        $(basename "$0") --init-config | --print-config
        $(basename "$0") state --json
+       $(basename "$0") transcript <slug> [--limit N]
        $(basename "$0") answer <slug> <yes|no>
 
 Options:
@@ -56,19 +57,22 @@ Options:
 Subcommands (read-only / client verbs — see docs/backends.md):
   state --json        print a versioned JSON snapshot of the daemon and every
                       conversation, then exit.
+  transcript <slug> [--limit N]
+                      print a versioned JSON transcript (inbound + outbound
+                      turns, oldest first) for one conversation, then exit.
   answer <slug> <yes|no>
                       answer a conversation's parked permission request from the
                       CLI, exactly as replying "sim"/"não" over WhatsApp would.
 EOF
 }
 
-# Positional subcommands (state, answer) sit beside the flag modes. They are
-# clients of a (possibly running) daemon, not a second daemon: they load config
-# + backend read-only and never take the single-instance lock. Dispatched before
-# the flag parser so `wabox-bot state --json` works with the verb as $1. The
-# backend and config come from WABOX_BOT_BACKEND / WABOX_BOT_CONFIG (env or the
-# default config file); flags aren't parsed for subcommands.
-if [[ "${1:-}" == "state" || "${1:-}" == "answer" ]]; then
+# Positional subcommands (state, transcript, answer) sit beside the flag modes.
+# They are clients of a (possibly running) daemon, not a second daemon: they load
+# config + backend read-only and never take the single-instance lock. Dispatched
+# before the flag parser so `wabox-bot state --json` works with the verb as $1.
+# The backend and config come from WABOX_BOT_BACKEND / WABOX_BOT_CONFIG (env or
+# the default config file); flags aren't parsed for subcommands.
+if [[ "${1:-}" == "state" || "${1:-}" == "transcript" || "${1:-}" == "answer" ]]; then
   SUBCMD="$1"
   shift
   WABOX_BOT_CONFIG="${WABOX_BOT_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/wabox-bot/config}"
@@ -88,6 +92,12 @@ if [[ "${1:-}" == "state" || "${1:-}" == "answer" ]]; then
       # shellcheck source=lib/state.sh
       source "$LIB_DIR/state.sh"
       state_cli "$@"
+      exit $?
+      ;;
+    transcript)
+      # shellcheck source=lib/transcript.sh
+      source "$LIB_DIR/transcript.sh"
+      transcript_cli "$@"
       exit $?
       ;;
     answer)
