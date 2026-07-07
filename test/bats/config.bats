@@ -68,6 +68,15 @@ EOF
   [[ "$output" == *"not found"* ]]
 }
 
+@test "CONFIG_VARS registry matches config.example exactly (drift guard, both ways)" {
+  load_core
+  local documented registry
+  documented="$(grep -oE '^[[:space:]]*#?[[:space:]]*[A-Z_][A-Z0-9_]*=' "$REPO_ROOT/config.example" \
+    | sed -E 's/^[[:space:]]*#?[[:space:]]*//; s/=$//' | sort -u)"
+  registry="$(printf '%s\n' "${CONFIG_VARS[@]}" | sort -u)"
+  [ "$documented" = "$registry" ]
+}
+
 @test "--print-config prints effective values and masks secrets" {
   export WABOX_BOT_BACKEND=echo
   export WABOX_STT_API_KEY=supersecret

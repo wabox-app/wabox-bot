@@ -55,6 +55,7 @@ Usage: $(basename "$0") [--backend <name>] [--config <path>]
        $(basename "$0") prompt <slug> <text>
        $(basename "$0") gc [slug] [--yes]
        $(basename "$0") rm <slug> [--yes]
+       $(basename "$0") config <list --json | get VAR | set VAR val | unset VAR>
 
 Options:
   --backend <name>    use this backend (overrides WABOX_BOT_BACKEND;
@@ -103,8 +104,28 @@ Subcommands (read-only / client verbs — see docs/backends.md):
   rm <slug> [--yes]   delete a conversation completely (session + default
                       workdir). A /cwd override target is preserved. Prompts
                       unless --yes. Exit 0 ok, 1 usage, 3 lock busy.
+  config <action> …   read/write the config file. list --json (all vars,
+                      secrets masked) · get VAR (raw effective value) · set VAR
+                      value · unset VAR (revert to default). Restart the daemon
+                      to apply. Exit 0 ok, 1 usage / unknown var.
 EOF
 }
+
+# A subcommand may be preceded by `--config <path>` / `--config=<path>` to point
+# it at an alternate config file (the `config` verb operates on that file; the
+# others read it). Strip the flag off the front *only* when a real subcommand
+# follows, so `wabox-bot --config X` (daemon mode) is left for the flag parser.
+if [[ "${1:-}" == "--config" && $# -ge 3 ]]; then
+  case "$3" in
+    state | transcript | cmd | answer | send | prompt | gc | rm | config)
+      export WABOX_BOT_CONFIG="$2"; shift 2 ;;
+  esac
+elif [[ "${1:-}" == --config=* ]]; then
+  case "${2:-}" in
+    state | transcript | cmd | answer | send | prompt | gc | rm | config)
+      export WABOX_BOT_CONFIG="${1#--config=}"; shift ;;
+  esac
+fi
 
 # Positional subcommands (state, transcript, answer) sit beside the flag modes.
 # They are clients of a (possibly running) daemon, not a second daemon: they load
@@ -114,11 +135,17 @@ EOF
 # the default config file); flags aren't parsed for subcommands.
 if [[ "${1:-}" == "state" || "${1:-}" == "transcript" || "${1:-}" == "cmd" \
       || "${1:-}" == "answer" || "${1:-}" == "send" || "${1:-}" == "prompt" \
-      || "${1:-}" == "gc" || "${1:-}" == "rm" ]]; then
+      || "${1:-}" == "gc" || "${1:-}" == "rm" || "${1:-}" == "config" ]]; then
   SUBCMD="$1"
   shift
   WABOX_BOT_CONFIG="${WABOX_BOT_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/wabox-bot/config}"
   export WABOX_BOT_CONFIG
+  # Snapshot the caller's exported environment *before* config.sh applies its
+  # defaults, so `config set/unset` can distinguish a real env override from a
+  # value that merely came from the file or a built-in default.
+  if [[ "$SUBCMD" == "config" ]]; then
+    WABOX_CONFIG_PRE_ENV="$(compgen -e 2>/dev/null | tr '\n' ' ' || true)"
+  fi
   # shellcheck source=lib/config.sh
   source "$LIB_DIR/config.sh"
   # shellcheck source=lib/log.sh
@@ -193,6 +220,15 @@ if [[ "${1:-}" == "state" || "${1:-}" == "transcript" || "${1:-}" == "cmd" \
       # shellcheck source=lib/rm.sh
       source "$LIB_DIR/rm.sh"
       rm_main "$@"
+      exit $?
+      ;;
+    config)
+      # Structured read/write of the config file (list/get/set/unset). Needs
+      # only config.sh (registry + mask helpers), sourced above; no daemon,
+      # no lock (whole-file atomic writes).
+      # shellcheck source=lib/configverb.sh
+      source "$LIB_DIR/configverb.sh"
+      configverb_main "$@"
       exit $?
       ;;
   esac

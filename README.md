@@ -264,6 +264,8 @@ wabox-bot cmd <slug> "<slash command>"   # run /cwd, /model, /mode, /system, /cl
 wabox-bot answer <slug> <yes|no>         # answer a conversation's parked permission
 wabox-bot send <slug> [text]             # deliver a message (no agent turn)
 wabox-bot prompt <slug> <text>           # run an agent turn and deliver its reply
+wabox-bot config list --json             # all config vars (secrets masked)
+wabox-bot config get|set|unset <VAR> …   # read/write one config value
 ```
 
 - `state --json` prints one JSON object: a top-level `"version": 1` (the schema
@@ -296,6 +298,18 @@ wabox-bot prompt <slug> <text>           # run an agent turn and deliver its rep
   serializes against an in-flight turn.
 - `send <slug> [text]` / `prompt <slug> <text>` are the outbound-initiated
   verbs — see **Proactive messaging** below.
+- `config <list|get|set|unset>` is structured read/write access to the config
+  file, so a tool (or you) never has to rewrite sourced bash by hand.
+  `list --json` returns every known var as `{var, value, secret, set_in_file}`
+  with secrets masked (`••••`); `get <VAR>` prints the raw effective value
+  (secrets included — it's your own machine); `set <VAR> <value>` writes a plain
+  `VAR=…` assignment (creating the file from the template if needed, preserving
+  comments and unrelated lines); `unset <VAR>` removes the override to restore
+  the default. Only vars the template documents are accepted (unknown ⇒ exit
+  `1`); the daemon reads config at startup, so `set`/`unset` print a "restart to
+  apply" notice and warn when an environment export would shadow the file. For
+  computed or exotic lines, hand-edit the file — `config set` writes literal
+  values. `--config <path>` before the verb targets an alternate file.
 
 Exit codes: `0` ok · `2` no fresh pending permission · `3` conversation lock
 busy · `4` backend doesn't support answering · `1` usage/other. Both verbs pick

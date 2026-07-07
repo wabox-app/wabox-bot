@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-07-07
+
+### Added
+
+- **`config` verb** — structured, registry-guarded read/write of the config
+  file, so tooling (the wabox-tui Config screen) never rewrites sourced bash
+  heuristically.
+  - `config list --json` — every documented var as
+    `{var, value, secret, set_in_file}`, secrets masked (`••••`).
+  - `config get <VAR>` — the raw effective value (secrets included; it's the
+    operator's own machine and `list` is the masked surface).
+  - `config set <VAR> <value>` — writes a plain `VAR=<printf %q>` assignment,
+    creating the file from the template when absent, replacing any existing
+    assignment in place and preserving comments/unrelated lines.
+  - `config unset <VAR>` — removes the file override (idempotent), restoring the
+    built-in default.
+  - Only vars documented in `config.example` are accepted (a single
+    `CONFIG_VARS` registry, drift-guarded against the template by a test).
+    `set`/`unset` print a "restart the daemon to apply" notice and warn when an
+    environment export would shadow the file. `--config <path>` before the verb
+    targets an alternate file. Exit `0` ok, `1` usage / unknown var.
+
 ## [0.10.0] - 2026-07-07
 
 ### Added

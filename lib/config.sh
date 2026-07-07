@@ -141,6 +141,51 @@ check_dependencies() {
   need timeout
 }
 
+# ---- Config registry (see docs/superpowers/specs/2026-07-06-config-verb-design) --
+# The canonical list of vars the config template documents — the source of truth
+# for the `config` verb (list/get/set/unset guard) and the shared secret rule
+# below. It mirrors every assignment in config.example (a bats drift test asserts
+# both directions), so keep the two in sync. Kept name-only: values resolve via
+# indirect expansion against the environment config.sh has already populated.
+CONFIG_VARS=(
+  CC_ADVERTISE_SEND_DIR CC_PERMISSION_TIMEOUT CC_SHARED_SKILLS_DIR
+  CLAUDE_ARGS CLAUDE_BIN CLAUDE_TIMEOUT
+  DEBUG GROUP_PER_PARTICIPANT IGNORE_FROM_ME KEEP_PROCESSED
+  LOG_FILE PROCESSED_DIR SHUTDOWN_DRAIN_TIMEOUT STATE_DIR SYSTEM_PROMPT_FILE
+  WABOX_ACK_REACT WABOX_BOT_ALLOW_REMOTE_UPDATE WABOX_BOT_BACKEND
+  WABOX_BOT_UPDATE_CHECK WABOX_BOT_UPDATE_NET_TIMEOUT WABOX_DOC_MAX_MB
+  WABOX_FW_COMPUTE WABOX_FW_DEVICE WABOX_FW_MODEL
+  WABOX_INBOX WABOX_MEDIA_DIR WABOX_MEDIA_KEEP_DAYS
+  WABOX_OPENAI_WHISPER_MODEL WABOX_OUTBOX WABOX_PROCESSED_KEEP_DAYS
+  WABOX_QUOTE_REPLY WABOX_SEND_DIR WABOX_SEND_KEEP_DAYS
+  WABOX_STT_API_KEY WABOX_STT_API_MODEL WABOX_STT_API_URL
+  WABOX_TRANSCRIBE_CMD WABOX_TRANSCRIBE_LANG WABOX_TRANSCRIBE_TIMEOUT
+  WABOX_VOSK_MODEL WABOX_WHISPERCPP_BIN WABOX_WHISPERCPP_MODEL
+  WABOX_WORKDIR_TEMPLATE
+)
+
+# A var whose name carries a credential (KEY/TOKEN/SECRET) must never be printed
+# in bulk. Shared by --print-config and `config list`. Returns 0 (secret)/1 (not).
+config_is_secret() {
+  case "$1" in
+    *KEY* | *TOKEN* | *SECRET*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Mask a value for bulk/display output (`config list`): a non-empty secret
+# becomes ••••, everything else passes through (empty stays empty). `config get`
+# prints raw and does NOT call this; --print-config uses its own (set)/(empty)
+# form (below) for back-compatible output.
+config_mask() {
+  local var="$1" val="$2"
+  if config_is_secret "$var" && [[ -n "$val" ]]; then
+    printf '••••'
+  else
+    printf '%s' "$val"
+  fi
+}
+
 # Print effective configuration for diagnostics (--print-config). Lists the
 # resolved core variables plus every WABOX_*/CLAUDE_* var and SYSTEM_PROMPT_FILE
 # currently set (covers backend and plugin vars), minus internal/injected ones.
@@ -153,14 +198,11 @@ _print_config_one() {
     return
   fi
   val="${!name}"
-  case "$name" in
-    *KEY* | *TOKEN* | *SECRET*)
-      [[ -n "$val" ]] && val="(set)" || val="(empty)"
-      ;;
-    *)
-      [[ -n "$val" ]] || val="(empty)"
-      ;;
-  esac
+  if config_is_secret "$name"; then
+    [[ -n "$val" ]] && val="(set)" || val="(empty)"
+  else
+    [[ -n "$val" ]] || val="(empty)"
+  fi
   printf '%s=%s\n' "$name" "$val"
 }
 
