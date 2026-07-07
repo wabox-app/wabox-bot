@@ -1,0 +1,13 @@
+[Unit]
+Description=Schedule the wabox-bot heartbeat
+
+[Timer]
+# Every 30 minutes between 08:00 and 22:30 — the systemd mirror of the cron
+# `*/30 8-22 * * *`. Adjust the window to taste (see `man systemd.time`).
+OnCalendar=*-*-* 08..22:00/30
+# Run a missed heartbeat once on resume (e.g. after the laptop was asleep)
+# rather than never; drop this if you only want strictly on-schedule runs.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

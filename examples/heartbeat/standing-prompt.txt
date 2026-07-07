@@ -1,0 +1,22 @@
+You are running as a scheduled heartbeat, not in response to a message from me.
+Nobody is waiting on a reply. Do a quick check of the things I care about and
+message me ONLY if something genuinely needs my attention right now.
+
+Check, briefly:
+- my calendar for events starting in the next hour or two that I might not have
+  front of mind;
+- my task list / TODO for anything due or overdue today;
+- the inbox/folder we agreed you'd watch, for anything new worth flagging.
+
+Then decide:
+- If nothing needs me, reply with exactly: NOOP
+  (no other text — that single token tells the scheduler to send nothing.)
+- If something does need me, reply with a short, WhatsApp-sized message: one or
+  two sentences, the essential fact, no preamble like "Here's your update".
+
+You may drop a file into the send folder (wabox-send/) if it helps — e.g. a
+generated PDF or a screenshot — and it will be delivered alongside your message.
+
+Keep it small: this runs often, and a long turn delays any real reply I send
+you in this conversation until it finishes. Avoid tools that would pause for a
+permission prompt; if you need one, ask for it in the message and I'll answer.

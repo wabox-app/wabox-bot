@@ -10,25 +10,20 @@
 # Written atomically (temp + rename) because two messages from the same sender
 # can be handled concurrently, before the per-conversation flock in step 6
 # serializes the backend call — a plain `>` could interleave into a corrupt
-# file. conv_key is idempotent (same content every time); last_message is a
-# fresh inbound record ({at, direction, text_preview}).
+# file. conv_key is idempotent (same content every time); the last_message
+# inbound record is written by the shared lastmsg_write (lib/lastmsg.sh), which
+# the send/prompt verbs reuse for their `direction:"out"` records.
 persist_conversation_meta() {
   local slug="$1" conv_key="$2" preview="$3"
   local dir="$SESSIONS_DIR/$slug"
   mkdir -p "$dir"
 
-  local ktmp="$dir/.conv_key.tmp.$$"
+  local ktmp="$dir/.conv_key.tmp.$BASHPID.$RANDOM"
   if printf '%s\n' "$conv_key" >"$ktmp" 2>/dev/null; then
     mv -f -- "$ktmp" "$dir/conv_key" 2>/dev/null || rm -f -- "$ktmp"
   fi
 
-  local mtmp="$dir/.last_message.tmp.$$"
-  if jq -n \
-    --argjson at "$(date +%s)" \
-    --arg text "$preview" \
-    '{at: $at, direction: "in", text_preview: $text}' >"$mtmp" 2>/dev/null; then
-    mv -f -- "$mtmp" "$dir/last_message.json" 2>/dev/null || rm -f -- "$mtmp"
-  fi
+  lastmsg_write "$slug" in "$preview"
 }
 
 # 0 if another envelope for the same conversation is currently queued in the

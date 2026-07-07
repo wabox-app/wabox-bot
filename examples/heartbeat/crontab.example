@@ -1,0 +1,21 @@
+# wabox-bot heartbeat — crontab example.
+#
+# Runs a standing prompt for ONE conversation every 30 minutes between 08:00 and
+# 22:00, and lets the agent decide whether to message you (it replies with the
+# NOOP sentinel when there's nothing worth saying — see standing-prompt.txt).
+#
+# Install with `crontab -e` and paste the line below, after editing:
+#   - SLUG   : the conversation to speak into. Find it with
+#                wabox-bot state --json \
+#                  | jq -r '.conversations[] | "\(.slug)\t\(.conv_key)\t\(.last_message.text_preview // "")"'
+#              and copy the slug of the chat you want the heartbeat to post to.
+#   - paths  : point at your wabox-bot install and your standing prompt file.
+#
+# `|| [ $? -eq 5 ]` turns the NOOP suppression exit code (5) back into success,
+# so a quiet heartbeat is not logged/alerted as a cron failure. A real failure
+# (usage 1, lock busy 3, timeout 124) still surfaces.
+#
+# cron runs each line under /bin/sh with a minimal PATH — use absolute paths.
+
+SLUG=REPLACE_WITH_YOUR_SLUG
+*/30 8-22 * * * /home/you/.local/bin/wabox-bot prompt "$SLUG" "$(cat /home/you/.config/wabox-bot/standing-prompt.txt)" >> /home/you/.local/state/wabox-bot/heartbeat.log 2>&1 || [ $? -eq 5 ]

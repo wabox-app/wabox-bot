@@ -1,0 +1,23 @@
+[Unit]
+Description=wabox-bot heartbeat — a standing agent turn for one conversation
+# Needs the same environment the daemon runs in; it talks to the same STATE_DIR.
+
+[Service]
+Type=oneshot
+
+# The NOOP sentinel makes `wabox-bot prompt` exit 5 when it suppresses delivery.
+# Treat 5 as success so a quiet heartbeat is not recorded as a failed unit.
+# (A real error — usage 1, lock busy 3, timeout 124 — still marks it failed.)
+SuccessExitStatus=5
+
+# Edit three things:
+#   - YOUR_SLUG: the conversation to post into. Find it with
+#       wabox-bot state --json | jq -r '.conversations[] | "\(.slug)\t\(.conv_key)"'
+#   - the wabox-bot path (typically %h/.local/bin/wabox-bot after install.sh);
+#   - the standing prompt path.
+# systemd expands %h to your home dir; the $(...) is evaluated by /bin/sh.
+ExecStart=/bin/sh -c '%h/.local/bin/wabox-bot prompt YOUR_SLUG "$(cat %h/.config/wabox-bot/standing-prompt.txt)"'
+
+# Global backend defaults, if your login shell doesn't already export them.
+# Environment=WABOX_BOT_BACKEND=claude-code
+# Environment=CLAUDE_BIN=%h/.local/bin/claude

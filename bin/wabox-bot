@@ -51,6 +51,8 @@ Usage: $(basename "$0") [--backend <name>] [--config <path>]
        $(basename "$0") transcript <slug> [--limit N]
        $(basename "$0") cmd <slug> "<slash command>"
        $(basename "$0") answer <slug> <yes|no>
+       $(basename "$0") send <slug> [text] | send --to <jid> [text]
+       $(basename "$0") prompt <slug> <text>
 
 Options:
   --backend <name>    use this backend (overrides WABOX_BOT_BACKEND;
@@ -81,6 +83,16 @@ Subcommands (read-only / client verbs — see docs/backends.md):
   answer <slug> <yes|no>
                       answer a conversation's parked permission request from the
                       CLI, exactly as replying "sim"/"não" over WhatsApp would.
+  send <slug> [text|-] [--file <path>...]
+  send --to <jid|number> [text|-] [--file <path>...]
+                      deliver a message to a conversation (no agent turn). Text
+                      omitted or "-" reads stdin. --to targets a raw recipient
+                      with no prior conversation. Exit 0 sent, 1 usage.
+  prompt <slug> <text|->
+                      run an agent turn for a conversation and deliver its reply,
+                      suppressing delivery when the reply is empty or the NOOP
+                      sentinel (WABOX_PROMPT_NOOP). Exit 0 delivered, 1 usage,
+                      3 lock busy, 5 suppressed, 124 backend timeout.
 EOF
 }
 
@@ -90,7 +102,8 @@ EOF
 # before the flag parser so `wabox-bot state --json` works with the verb as $1.
 # The backend and config come from WABOX_BOT_BACKEND / WABOX_BOT_CONFIG (env or
 # the default config file); flags aren't parsed for subcommands.
-if [[ "${1:-}" == "state" || "${1:-}" == "transcript" || "${1:-}" == "cmd" || "${1:-}" == "answer" ]]; then
+if [[ "${1:-}" == "state" || "${1:-}" == "transcript" || "${1:-}" == "cmd" \
+      || "${1:-}" == "answer" || "${1:-}" == "send" || "${1:-}" == "prompt" ]]; then
   SUBCMD="$1"
   shift
   WABOX_BOT_CONFIG="${WABOX_BOT_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/wabox-bot/config}"
@@ -101,6 +114,8 @@ if [[ "${1:-}" == "state" || "${1:-}" == "transcript" || "${1:-}" == "cmd" || "$
   source "$LIB_DIR/log.sh"
   # shellcheck source=lib/outbox.sh
   source "$LIB_DIR/outbox.sh"
+  # shellcheck source=lib/lastmsg.sh
+  source "$LIB_DIR/lastmsg.sh"
   # shellcheck source=lib/workdir.sh
   source "$LIB_DIR/workdir.sh"
   # shellcheck source=lib/backend.sh
@@ -132,6 +147,25 @@ if [[ "${1:-}" == "state" || "${1:-}" == "transcript" || "${1:-}" == "cmd" || "$
       # shellcheck source=lib/answer.sh
       source "$LIB_DIR/answer.sh"
       answer_main "$@"
+      exit $?
+      ;;
+    send)
+      # Dumb delivery: write an outbox job (no backend turn, no lock — the
+      # write is atomic). Needs only outbox + lastmsg, both sourced above.
+      # shellcheck source=lib/send.sh
+      source "$LIB_DIR/send.sh"
+      send_main "$@"
+      exit $?
+      ;;
+    prompt)
+      # A real agent turn delivered to a conversation. Runs the canonical
+      # backend_reply under the per-conversation flock, with the same senddir
+      # lifecycle as an inbound turn (so a heartbeat can attach files).
+      # shellcheck source=lib/senddir.sh
+      source "$LIB_DIR/senddir.sh"
+      # shellcheck source=lib/prompt.sh
+      source "$LIB_DIR/prompt.sh"
+      prompt_main "$@"
       exit $?
       ;;
   esac
@@ -261,6 +295,8 @@ install_signal_handlers
 source "$LIB_DIR/routing.sh"
 # shellcheck source=lib/outbox.sh
 source "$LIB_DIR/outbox.sh"
+# shellcheck source=lib/lastmsg.sh
+source "$LIB_DIR/lastmsg.sh"
 # shellcheck source=lib/workdir.sh
 source "$LIB_DIR/workdir.sh"
 # shellcheck source=lib/senddir.sh

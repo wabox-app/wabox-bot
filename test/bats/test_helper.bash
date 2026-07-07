@@ -40,6 +40,8 @@ load_core() {
   source "$LIB_DIR/routing.sh"
   # shellcheck source=lib/outbox.sh
   source "$LIB_DIR/outbox.sh"
+  # shellcheck source=lib/lastmsg.sh
+  source "$LIB_DIR/lastmsg.sh"
   # shellcheck source=lib/workdir.sh
   source "$LIB_DIR/workdir.sh"
   # shellcheck source=lib/senddir.sh

@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-06
+
+### Added
+
+- **Proactive messaging** — outbound-initiated messages, no scheduler and no
+  daemon changes. Two client verbs in the `answer`/`cmd` family:
+  - `wabox-bot send <slug> [text]` — dumb delivery of a message to a
+    conversation (no agent turn, no lock; the outbox write is atomic). Text
+    omitted or `-` reads stdin; `--file <path>` (repeatable) attaches files;
+    `--to <jid|number>` targets a recipient with no prior conversation. The slug
+    path records a `direction:"out"` entry in `last_message.json`.
+  - `wabox-bot prompt <slug> <text>` — runs the canonical agent turn (same
+    session, workdir, per-conversation lock, and send-folder lifecycle as an
+    inbound message) and delivers the reply. Suppresses delivery — nothing sent,
+    exit `5` — when the reply is empty or the `NOOP` sentinel (configurable via
+    `WABOX_PROMPT_NOOP`). Exit codes: `0` delivered, `1` usage/unknown slug,
+    `3` lock busy, `5` suppressed, `124` backend timeout.
+  - `examples/heartbeat/` — a crontab line and a systemd user timer+service pair
+    invoking `prompt` with a standing instruction, plus `standing-prompt.txt` and
+    a README walkthrough. The heartbeat pattern: a scheduled `prompt` where the
+    agent replies `NOOP` unless something needs attention, so it messages you
+    only when it has something to say.
+- `last_message.json` now carries `direction:"out"` for messages the `send`/
+  `prompt` verbs deliver (previously only inbound `"in"` records existed).
+- `lib/lastmsg.sh` — a shared `lastmsg_write` writer extracted from
+  `lib/inbox.sh` so the three writers (inbound handler, `send`, `prompt`) share
+  one atomic implementation.
+
 ## [0.6.0] - 2026-07-06
 
 ### Added
@@ -212,7 +240,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `install.sh` one-liner: clones to `~/.local/share/wabox-bot`, symlinks
   `bin/wabox-bot` into `~/.local/bin/`.
 
-[Unreleased]: https://github.com/wabox-app/wabox-bot/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/wabox-app/wabox-bot/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/wabox-app/wabox-bot/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/wabox-app/wabox-bot/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/wabox-app/wabox-bot/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/wabox-app/wabox-bot/compare/v0.3.0...v0.4.0

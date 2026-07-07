@@ -180,6 +180,8 @@ wabox-bot state --json                   # snapshot of the daemon + every conver
 wabox-bot transcript <slug> [--limit N]  # one conversation's message history
 wabox-bot cmd <slug> "<slash command>"   # run /cwd, /model, /mode, /system, /clear …
 wabox-bot answer <slug> <yes|no>         # answer a conversation's parked permission
+wabox-bot send <slug> [text]             # deliver a message (no agent turn)
+wabox-bot prompt <slug> <text>           # run an agent turn and deliver its reply
 ```
 
 - `state --json` prints one JSON object: a top-level `"version": 1` (the schema
@@ -210,6 +212,8 @@ wabox-bot answer <slug> <yes|no>         # answer a conversation's parked permis
   `sim`/`não` over WhatsApp would, and the reply still lands in the chat. It
   takes the per-conversation lock (not the single-instance lock), so it
   serializes against an in-flight turn.
+- `send <slug> [text]` / `prompt <slug> <text>` are the outbound-initiated
+  verbs — see **Proactive messaging** below.
 
 Exit codes: `0` ok · `2` no fresh pending permission · `3` conversation lock
 busy · `4` backend doesn't support answering · `1` usage/other. Both verbs pick
@@ -217,6 +221,47 @@ their backend and config from `WABOX_BOT_BACKEND` / `WABOX_BOT_CONFIG` (env or
 the default config file). The two backend hooks behind them
 (`backend_state_json`, `backend_answer_permission`) are optional and documented
 in `docs/backends.md`.
+
+## Proactive messaging
+
+Everything above is reactive — the bot only speaks when a message arrives. Two
+verbs let *you* (or a scheduler acting for you) start the conversation:
+
+```bash
+wabox-bot send <slug> [text]            # dumb delivery — no agent involved
+wabox-bot send --to <jid|number> [text] # to a recipient with no prior chat
+wabox-bot prompt <slug> <text>          # a real agent turn, reply delivered
+```
+
+- **`send`** writes a single outbox job and returns. No daemon is required
+  (wabox sends any job that lands in the outbox) and no lock is taken — the write
+  is atomic. Text omitted or `-` reads stdin (multi-line friendly); `--file
+  <path>` (repeatable) attaches files. `<slug>` targets an existing conversation
+  and records a `direction:"out"` entry in its `last_message.json`; `--to` sends
+  to any JID or bare number (wabox normalizes it) with no conversation state —
+  operator-only power, identical to typing into the app.
+- **`prompt`** runs the canonical turn: it takes the per-conversation lock,
+  resolves the working directory, and feeds the text to the same `backend_reply`
+  an inbound message would, then delivers the reply and records it. Because it's
+  a real turn, **the session learns what was said** — a later "what did you
+  remind me about?" works — and the turn can attach files it writes into the send
+  folder. The flip side: prompt turns are visible to the agent as prior history
+  and grow the session's context; `/clear` resets it as usual.
+
+**NOOP suppression.** If a `prompt` reply is empty or exactly `NOOP` (after
+trimming; the token is configurable via `WABOX_PROMPT_NOOP`), nothing is
+delivered and `prompt` exits `5`. This is what makes a *heartbeat* work: a
+scheduled prompt with a standing instruction that tells the agent to answer
+`NOOP` unless something needs you, so it speaks only when it has something to
+say.
+
+Exit codes — `send`: `0` sent · `1` usage / unknown slug / unreadable file.
+`prompt`: `0` delivered · `1` usage / unknown slug · `3` lock busy · `5`
+suppressed (NOOP — success for cron, but distinguishable) · `124` backend
+timeout.
+
+See [`examples/heartbeat/`](examples/heartbeat/) for a complete cron and systemd
+walkthrough of a morning-digest / reminder heartbeat.
 
 ## Migrating from `wabox/examples/wabox-claude-code.sh`
 
