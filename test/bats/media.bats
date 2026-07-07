@@ -22,15 +22,15 @@ teardown() {
   [ -z "$(media_type_of "$ENV_NONE")" ]
 }
 
-@test "media_stage copies into <workdir>/wabox-media and prints the relative path" {
+@test "media_stage copies into <workdir>/.wabox/media and prints the relative path" {
   src="$TMPDIR_TEST/src.jpg"
   printf 'bytes' >"$src"
   wd="$TMPDIR_TEST/wd"
   mkdir -p "$wd"
   run media_stage "$src" "$wd"
   [ "$status" -eq 0 ]
-  [ "$output" = "wabox-media/src.jpg" ]
-  [ -f "$wd/wabox-media/src.jpg" ]
+  [ "$output" = ".wabox/media/src.jpg" ]
+  [ -f "$wd/.wabox/media/src.jpg" ]
   [ -f "$src" ]   # original untouched (copy, not move)
 }
 

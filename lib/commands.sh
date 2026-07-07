@@ -78,11 +78,15 @@ $fence" "$id" "$stem")"
       return 0
       ;;
     /status)
-      local status_text
+      local status_text status_wd
+      # Resolve the path WITHOUT creating it (workdir_info's second line), then
+      # size the folder and its reclaimable .wabox/ share for the size line.
+      status_wd="$(workdir_info "$slug" | tail -n1)"
       status_text="Status:
 conv:    $conv_key
 backend: $(backend_name)
-workdir: $(workdir_display "$slug")"
+workdir: $(workdir_display "$slug")
+pasta:   $(human_bytes "$(dir_bytes "$status_wd")") (bot: $(human_bytes "$(dir_bytes "$(workdir_botdir_path "$status_wd")")"))"
       if declare -f backend_status_lines >/dev/null; then
         status_text+="
 $(backend_status_lines "$slug")"

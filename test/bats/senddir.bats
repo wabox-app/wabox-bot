@@ -6,11 +6,13 @@ setup() {
   source "$LIB_DIR/config.sh"
   # shellcheck source=lib/log.sh
   source "$LIB_DIR/log.sh"
+  # shellcheck source=lib/workdir.sh
+  source "$LIB_DIR/workdir.sh"
   # shellcheck source=lib/senddir.sh
   source "$LIB_DIR/senddir.sh"
   WORKDIR="$TMPDIR_TEST/wd"
   mkdir -p "$WORKDIR"
-  SEND="$WORKDIR/wabox-send"
+  SEND="$WORKDIR/.wabox/send"
 }
 
 teardown() {

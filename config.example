@@ -27,10 +27,11 @@ DEBUG="${DEBUG:-0}"                                      # 1 = verbose logging
 # Ack reaction: emoji reacted to a message when its agent turn *starts* (a
 # "working on it" signal). Empty = off (default). Try 👀 or 👍.
 WABOX_ACK_REACT="${WABOX_ACK_REACT:-}"
-# Outgoing files: a file the agent writes into <workdir>/$WABOX_SEND_DIR/ is
-# attached to its reply. Archived (not deleted) at the next turn's start; the
-# archive is pruned after WABOX_SEND_KEEP_DAYS.
-WABOX_SEND_DIR="${WABOX_SEND_DIR:-wabox-send}"
+# Outgoing files: a file the agent writes into <workdir>/.wabox/$WABOX_SEND_DIR/
+# is attached to its reply. Archived (not deleted) at the next turn's start; the
+# archive is pruned after WABOX_SEND_KEEP_DAYS. WABOX_SEND_DIR is now relative to
+# the hidden .wabox/ plumbing dir (was a bare folder at the workdir root).
+WABOX_SEND_DIR="${WABOX_SEND_DIR:-send}"
 WABOX_SEND_KEEP_DAYS="${WABOX_SEND_KEEP_DAYS:-7}"
 # Quote-reply policy: auto|always|never. auto quotes in groups or when a newer
 # message for the same chat is still queued (so replies stay threaded).
@@ -49,6 +50,17 @@ WABOX_QUOTE_REPLY="${WABOX_QUOTE_REPLY:-auto}"
 # .claude/skills, so one curated set reaches every conversation. Treat it like
 # code you run — every chat gets those skills. Empty = off (default).
 CC_SHARED_SKILLS_DIR="${CC_SHARED_SKILLS_DIR:-}"
+
+# ── Workdir lifecycle ─────────────────────────────────────────────────────────
+# All bot plumbing lives under <workdir>/.wabox/ so it never litters your own
+# folder after /cwd. Inbound media is staged under .wabox/$WABOX_MEDIA_DIR/.
+WABOX_MEDIA_DIR="${WABOX_MEDIA_DIR:-media}"
+# `wabox-bot gc` prunes reclaimable plumbing by age (dry-run unless --yes). Each
+# *_KEEP_DAYS is a day count; 0 keeps that category forever.
+WABOX_MEDIA_KEEP_DAYS="${WABOX_MEDIA_KEEP_DAYS:-30}"     # staged inbound media
+# processed/ is the audit trail. 90 days is the first non-keep-forever default;
+# set 0 to restore the old keep-everything behavior.
+WABOX_PROCESSED_KEEP_DAYS="${WABOX_PROCESSED_KEEP_DAYS:-90}"
 
 # ── Self-update ───────────────────────────────────────────────────────────────
 # On startup the daemon checks (backgrounded, best-effort) for a newer published

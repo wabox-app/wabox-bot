@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-07-07
+
+### Added
+
+- **Workdir lifecycle** — bot plumbing is consolidated, conversations are
+  measurable, and there are explicit verbs to prune and delete them.
+  - All bot-owned plumbing now lives under one hidden dir per conversation,
+    `<workdir>/.wabox/` — staged inbound media (`.wabox/media/`) and the
+    outgoing-file staging folder with its archives (`.wabox/send/`,
+    `.wabox/send/.sent/`). This keeps a `/cwd`-redirected folder (the user's
+    own directory) clean instead of sprouting bare plumbing dirs. New
+    `WABOX_MEDIA_DIR` (default `media`) names the media subfolder.
+  - **Migration** of the brief earlier flat layout (`wabox-send/`,
+    `wabox-media/` at the workdir root) into `.wabox/`, leaving a relative
+    compat symlink at the old name for one release so in-flight jobs keep
+    resolving. `gc` removes the symlinks once they go dangling.
+  - **`wabox-bot state --json --sizes`** adds `workdir_bytes` and `botdir_bytes`
+    (the reclaimable `.wabox/` share) per conversation. Opt-in (it runs `du`);
+    additive fields keep the contract at `version: 1`. `/status` gains a
+    human-readable `pasta:` size line over WhatsApp.
+  - **`wabox-bot gc [slug] [--yes]`** prunes reclaimable plumbing by mtime —
+    dry-run by default, `--yes` applies. Staged media past `WABOX_MEDIA_KEEP_DAYS`
+    (30), send archives past `WABOX_SEND_KEEP_DAYS` (7), and `PROCESSED_DIR`
+    envelopes+media past `WABOX_PROCESSED_KEEP_DAYS` (90; `0` disables any
+    category). No slug ⇒ all conversations; a busy conversation is skipped
+    non-blocking. Never crosses a symlink or touches agent/user files.
+  - **`wabox-bot rm <slug> [--yes]`** deletes a conversation completely (session
+    state + the default workdir). A `/cwd` override target is preserved — `rm`
+    removes only the pointer and reports the path. Prompts unless `--yes`, takes
+    the conversation lock (busy ⇒ exit `3`), CLI-only by design.
+
+### Changed
+
+- `WABOX_SEND_DIR` is now relative to `.wabox/` (default `send`, was the
+  workdir-root folder `wabox-send`). Anyone who set it explicitly in the few
+  hours it existed should re-point it; `--print-config` shows the resolved path.
+- `PROCESSED_DIR` envelopes are now pruned by `gc` after 90 days by default
+  (`WABOX_PROCESSED_KEEP_DAYS`). This is the first non-keep-forever default in
+  the project — set `WABOX_PROCESSED_KEEP_DAYS=0` to restore keep-everything.
+
 ## [0.8.0] - 2026-07-06
 
 ### Added

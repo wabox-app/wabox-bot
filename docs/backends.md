@@ -190,8 +190,8 @@ the backend — the reply contract stays "text on stdout". You get them for free
 - **Quote-replies** — the loop decides whether to quote (see `WABOX_QUOTE_REPLY`)
   and computes `replyTo` itself. Nothing to do.
 - **Outgoing files** — any file that exists in
-  `<workdir>/$WABOX_SEND_DIR/` (default `wabox-send/`, a subfolder of
-  `conversation_workdir`) when your turn returns is attached to the reply,
+  `<workdir>/.wabox/$WABOX_SEND_DIR/` (default `.wabox/send/`, under the hidden
+  `.wabox/` plumbing dir of `conversation_workdir`) when your turn returns is attached to the reply,
   sorted by name, with the reply text as the first file's caption. The folder is
   cleared (leftovers archived to `.sent/`) at the *start* of each turn, so only
   files this turn produced are sent. Failed/timed-out turns attach nothing.
@@ -202,7 +202,9 @@ the backend — the reply contract stays "text on stdout". You get them for free
   backends, do the equivalent through whatever prompt-shaping knob you have:
   `agy` prepends `AGY_REPLY_PREFIX`; `bob` users can add the instruction via
   `BOB_ARGS`. The mechanism is the same — tell the agent to write files it wants
-  delivered into `<workdir>/wabox-send/`.
+  delivered into `<workdir>/.wabox/send/`. The `claude-code` hint interpolates
+  the resolved absolute path (via `senddir_path`), so it always names the real
+  location even if `WABOX_SEND_DIR` is customized.
 
   Note: the loop attaches whatever readable files land in the folder — a
   compromised or careless agent could copy a file it shouldn't. That's the

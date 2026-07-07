@@ -176,3 +176,15 @@ Always reply in one paragraph." "$SLUG" "$JID" "$JID" "MSG" "stem"
   handle_slash_command "/status" "$SLUG" "$JID" "$JID" "MSG" "cwdstatus"
   [[ "$(jq -r '.text' "$WABOX_OUTBOX/cwdstatus.json")" == *"workdir: "* ]]
 }
+
+@test "/status reports a human-readable folder size line" {
+  handle_slash_command "/status" "$SLUG" "$JID" "$JID" "MSG" "szstatus"
+  text="$(jq -r '.text' "$WABOX_OUTBOX/szstatus.json")"
+  [[ "$text" == *"pasta:"* ]]
+  [[ "$text" == *"(bot:"* ]]
+}
+
+@test "/status does not materialize the workdir as a side effect" {
+  handle_slash_command "/status" "$SLUG" "$JID" "$JID" "MSG" "nomkdir"
+  [ ! -e "$STATE_DIR/work/$SLUG" ]
+}

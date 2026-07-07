@@ -47,12 +47,14 @@ usage() {
   cat <<EOF
 Usage: $(basename "$0") [--backend <name>] [--config <path>]
        $(basename "$0") --init-config | --print-config
-       $(basename "$0") state --json
+       $(basename "$0") state --json [--sizes]
        $(basename "$0") transcript <slug> [--limit N]
        $(basename "$0") cmd <slug> "<slash command>"
        $(basename "$0") answer <slug> <yes|no>
        $(basename "$0") send <slug> [text] | send --to <jid> [text]
        $(basename "$0") prompt <slug> <text>
+       $(basename "$0") gc [slug] [--yes]
+       $(basename "$0") rm <slug> [--yes]
 
 Options:
   --backend <name>    use this backend (overrides WABOX_BOT_BACKEND;
@@ -71,8 +73,10 @@ Options:
   -h, --help          show this message and exit
 
 Subcommands (read-only / client verbs — see docs/backends.md):
-  state --json        print a versioned JSON snapshot of the daemon and every
-                      conversation, then exit.
+  state --json [--sizes]
+                      print a versioned JSON snapshot of the daemon and every
+                      conversation, then exit. --sizes adds per-conversation
+                      workdir_bytes / botdir_bytes (opt-in — it runs du).
   transcript <slug> [--limit N]
                       print a versioned JSON transcript (inbound + outbound
                       turns, oldest first) for one conversation, then exit.
@@ -93,6 +97,12 @@ Subcommands (read-only / client verbs — see docs/backends.md):
                       suppressing delivery when the reply is empty or the NOOP
                       sentinel (WABOX_PROMPT_NOOP). Exit 0 delivered, 1 usage,
                       3 lock busy, 5 suppressed, 124 backend timeout.
+  gc [slug] [--yes]   prune reclaimable bot plumbing (staged media, send
+                      archives, aged processed/ envelopes) by mtime. Dry-run
+                      unless --yes. No slug ⇒ all conversations. Exit 0, 1 usage.
+  rm <slug> [--yes]   delete a conversation completely (session + default
+                      workdir). A /cwd override target is preserved. Prompts
+                      unless --yes. Exit 0 ok, 1 usage, 3 lock busy.
 EOF
 }
 
@@ -103,7 +113,8 @@ EOF
 # The backend and config come from WABOX_BOT_BACKEND / WABOX_BOT_CONFIG (env or
 # the default config file); flags aren't parsed for subcommands.
 if [[ "${1:-}" == "state" || "${1:-}" == "transcript" || "${1:-}" == "cmd" \
-      || "${1:-}" == "answer" || "${1:-}" == "send" || "${1:-}" == "prompt" ]]; then
+      || "${1:-}" == "answer" || "${1:-}" == "send" || "${1:-}" == "prompt" \
+      || "${1:-}" == "gc" || "${1:-}" == "rm" ]]; then
   SUBCMD="$1"
   shift
   WABOX_BOT_CONFIG="${WABOX_BOT_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/wabox-bot/config}"
@@ -166,6 +177,22 @@ if [[ "${1:-}" == "state" || "${1:-}" == "transcript" || "${1:-}" == "cmd" \
       # shellcheck source=lib/prompt.sh
       source "$LIB_DIR/prompt.sh"
       prompt_main "$@"
+      exit $?
+      ;;
+    gc)
+      # Age-based pruning of reclaimable bot plumbing. Read-mostly; takes each
+      # conversation's flock non-blocking (workdir/size helpers sourced above).
+      # shellcheck source=lib/gc.sh
+      source "$LIB_DIR/gc.sh"
+      gc_main "$@"
+      exit $?
+      ;;
+    rm)
+      # Full conversation deletion. Takes the per-conversation flock; never
+      # touches a /cwd override target's contents.
+      # shellcheck source=lib/rm.sh
+      source "$LIB_DIR/rm.sh"
+      rm_main "$@"
       exit $?
       ;;
   esac

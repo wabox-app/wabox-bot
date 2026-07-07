@@ -28,7 +28,7 @@ takes care of:
   folder (Claude can't resume a session across directories).
 - **Image & audio messages** — an image is handed to the agent to read; a voice
   note is transcribed to text first via a pluggable command (`WABOX_TRANSCRIBE_CMD`).
-  Captions are included. Media is staged under `<working-folder>/wabox-media/`.
+  Captions are included. Media is staged under `<working-folder>/.wabox/media/`.
 - **Per-conversation overrides** persisted to disk and surviving restarts.
 
 ## Install
@@ -128,8 +128,11 @@ variables themselves are listed below.
 | `WABOX_TRANSCRIBE_CMD` | (empty) | Speech-to-text command for inbound audio; the audio path is appended as the last argument, transcript read from stdout. Empty ⇒ audio is ignored. |
 | `WABOX_TRANSCRIBE_TIMEOUT` | `120` | Max seconds for the transcription command. |
 | `WABOX_ACK_REACT` | (empty) | Emoji reacted to a message when its agent turn *starts* (a "working on it" signal). Empty ⇒ off. |
-| `WABOX_SEND_DIR` | `wabox-send` | Folder (under each conversation's workdir) an agent drops files into to have them attached to its reply. |
-| `WABOX_SEND_KEEP_DAYS` | `7` | How long archived (`.sent/`) copies of sent files are kept before pruning. |
+| `WABOX_SEND_DIR` | `send` | Folder (under each conversation's `.wabox/` plumbing dir) an agent drops files into to have them attached to its reply. |
+| `WABOX_SEND_KEEP_DAYS` | `7` | How long archived (`.sent/`) copies of sent files are kept before `gc` prunes them. |
+| `WABOX_MEDIA_DIR` | `media` | Folder (under `.wabox/`) inbound media is staged into. |
+| `WABOX_MEDIA_KEEP_DAYS` | `30` | Age past which `gc` prunes staged inbound media. `0` ⇒ keep forever. |
+| `WABOX_PROCESSED_KEEP_DAYS` | `90` | Age past which `gc` prunes `PROCESSED_DIR` envelopes (+ their media). `0` ⇒ keep forever. |
 | `WABOX_QUOTE_REPLY` | `auto` | Quote-reply policy: `auto` (groups, or when a backlog is queued), `always`, or `never`. |
 | `WABOX_WORKDIR_TEMPLATE` | shipped template | Instructions file seeded into a new default workdir (WhatsApp etiquette + memory practice). Empty ⇒ seeding off. |
 | `CC_SHARED_SKILLS_DIR` | (empty) | Folder of shared agent skills symlinked into every new `claude-code` workdir as `.claude/skills`. Empty ⇒ off. |
@@ -154,14 +157,14 @@ Adding your own backend is a single bash file. See `docs/backends.md`.
 
 An agent can deliver files over WhatsApp — a generated PDF, a chart, an edited
 image — by writing them into its conversation's send folder
-(`<workdir>/wabox-send/`, name via `WABOX_SEND_DIR`). Whatever files are in that
+(`<workdir>/.wabox/send/`, name via `WABOX_SEND_DIR`). Whatever files are in that
 folder when the turn ends are attached to the reply (sorted by name; the reply
 text becomes the first file's caption; core sends multiple files as separate
 messages). An empty reply with files present becomes a files-only delivery.
 
 The `claude-code` backend tells the agent about the folder automatically (turn
 off with `CC_ADVERTISE_SEND_DIR=0`). The folder is cleared at the *start* of the
-next turn — leftovers are archived to `wabox-send/.sent/<id>/`, not deleted, so a
+next turn — leftovers are archived to `.wabox/send/.sent/<id>/`, not deleted, so a
 send that core is still reading isn't yanked out from under it; archives older
 than `WABOX_SEND_KEEP_DAYS` are pruned. Failed or timed-out turns attach nothing
 (their partial output waits in the folder and is archived next turn).
@@ -198,6 +201,44 @@ whatever) and the `claude-code` backend symlinks it into every new workdir as
 `.claude/skills` — one folder, every conversation follows. Treat it like code you
 run: every chat gets those skills. A conversation can go local by replacing the
 symlink with a real directory.
+
+## Workdir lifecycle
+
+All bot-owned plumbing lives under one hidden dir per conversation,
+`<workdir>/.wabox/` — staged inbound media (`.wabox/media/`) and the
+outgoing-file staging folder with its archives (`.wabox/send/`, `.wabox/send/.sent/`).
+Keeping it hidden and consolidated matters most after `/cwd`: your own folder
+stays clean instead of sprouting bare `wabox-media/` / `wabox-send/` dirs.
+
+> **Migration:** the earlier flat `wabox-send/` / `wabox-media/` folders (which
+> shipped only briefly) are moved into `.wabox/` the first time a conversation is
+> touched, leaving a relative compat symlink at the old name so in-flight jobs and
+> muscle memory keep working. `gc` removes those symlinks once they go dangling.
+
+**Sizes.** `wabox-bot state --json --sizes` adds `workdir_bytes` (the whole
+conversation folder) and `botdir_bytes` (the reclaimable `.wabox/` share) per
+conversation — it's opt-in because it runs `du`. `/status` shows a
+human-readable `pasta:` line over WhatsApp.
+
+**`gc [slug] [--yes]`** prunes reclaimable plumbing by age — dry-run by default
+(it prints what would go and the byte total), applying only with `--yes`. It
+touches nothing you or the agent authored: only staged media past
+`WABOX_MEDIA_KEEP_DAYS` (30), send archives past `WABOX_SEND_KEEP_DAYS` (7), and
+`PROCESSED_DIR` envelopes past `WABOX_PROCESSED_KEEP_DAYS` (90; `0` any of these
+⇒ keep forever). No slug ⇒ all conversations; a busy conversation is skipped, not
+waited on. Run it from cron next to the heartbeat:
+
+```cron
+# prune reclaimable plumbing nightly at 04:00
+0 4 * * * /path/to/wabox-bot gc --yes >/dev/null 2>&1
+```
+
+**`rm <slug> [--yes]`** deletes a conversation completely — its session state and,
+when the workdir is the auto default, that folder too. A `/cwd`-redirected folder
+is *your* folder: `rm` removes the pointer to it and prints the path it left
+behind, never the contents. It prompts unless `--yes`, takes the conversation lock
+(busy ⇒ exit `3`), and is CLI-only — deletion is deliberately not promptable from
+chat. The next message from that contact starts a fresh conversation.
 
 ## External tooling
 

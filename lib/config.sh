@@ -77,10 +77,10 @@ SHUTDOWN_DRAIN_TIMEOUT="${SHUTDOWN_DRAIN_TIMEOUT:-180}"
 # just "received"). Empty ⇒ disabled, the default, keeping outbox traffic
 # byte-identical to prior releases.
 WABOX_ACK_REACT="${WABOX_ACK_REACT:-}"
-# Outgoing files: the folder (relative to each conversation's workdir) an agent
-# drops files into for them to be attached to its reply, and how long archived
-# `.sent/` copies are kept before opportunistic pruning.
-WABOX_SEND_DIR="${WABOX_SEND_DIR:-wabox-send}"
+# Outgoing files: the folder (relative to each conversation's `.wabox/` plumbing
+# dir) an agent drops files into for them to be attached to its reply, and how
+# long archived `.sent/` copies are kept before opportunistic pruning.
+WABOX_SEND_DIR="${WABOX_SEND_DIR:-send}"
 WABOX_SEND_KEEP_DAYS="${WABOX_SEND_KEEP_DAYS:-7}"
 # Quote-reply policy: auto|always|never. `auto` quotes in groups or when a newer
 # envelope for the same conversation is still queued (so a reply can't land
@@ -107,6 +107,17 @@ WABOX_WORKDIR_TEMPLATE="${WABOX_WORKDIR_TEMPLATE-${ROOT:-$(cd "$(dirname "${BASH
 # update the one folder, every conversation follows). Curate it like code you
 # run: every conversation gets those skills. Empty ⇒ no symlink.
 CC_SHARED_SKILLS_DIR="${CC_SHARED_SKILLS_DIR:-}"
+
+# ---- Workdir lifecycle (see docs/superpowers/specs/2026-07-06-workdir-lifecycle) --
+# Inbound media is staged under each conversation's `.wabox/<WABOX_MEDIA_DIR>/`.
+WABOX_MEDIA_DIR="${WABOX_MEDIA_DIR:-media}"
+# `wabox-bot gc` prunes by mtime. Each `*_KEEP_DAYS` is a day count; `0` keeps
+# that category forever. Staged inbound media and (audit) processed envelopes
+# default to generous windows; the send archive reuses WABOX_SEND_KEEP_DAYS.
+WABOX_MEDIA_KEEP_DAYS="${WABOX_MEDIA_KEEP_DAYS:-30}"
+# processed/ is the audit trail. 90 days is the first non-keep-forever default
+# in the project's history — set to 0 to restore the old keep-everything behavior.
+WABOX_PROCESSED_KEEP_DAYS="${WABOX_PROCESSED_KEEP_DAYS:-90}"
 
 mkdir -p "$STATE_DIR" "$SESSIONS_DIR" "$LOCKS_DIR" "$PROCESSED_DIR" \
   "$(dirname "$LOG_FILE")" "$WABOX_OUTBOX"

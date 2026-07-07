@@ -38,14 +38,14 @@ teardown() {
 }
 
 @test "bob_compose_prompt prepends an @-reference for images and keeps the caption" {
-  run bob_compose_prompt "what is this?" "wabox-media/p.jpg" "image"
+  run bob_compose_prompt "what is this?" ".wabox/media/p.jpg" "image"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"@wabox-media/p.jpg"* ]]
+  [[ "$output" == *"@.wabox/media/p.jpg"* ]]
   [[ "$output" == *"what is this?"* ]]
 }
 
 @test "bob_compose_prompt ignores a non-image media type" {
-  run bob_compose_prompt "transcript text" "wabox-media/a.ogg" "audio"
+  run bob_compose_prompt "transcript text" ".wabox/media/a.ogg" "audio"
   [ "$output" = "transcript text" ]
 }
 

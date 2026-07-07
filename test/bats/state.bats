@@ -67,6 +67,35 @@ seed_conv() {
   [ "$(jq -r '.conversations[0] | has("session_id") and has("overrides") and has("pending_permission")' <<<"$output")" = "true" ]
 }
 
+@test "sizes are null without --sizes, populated with it" {
+  slug="sz"
+  seed_conv "$slug" "s@s.whatsapp.net"
+  # Give the default workdir some bytes, split between agent content and .wabox/.
+  mkdir -p "$STATE_DIR/work/$slug/.wabox/media"
+  printf 'agentcontent' >"$STATE_DIR/work/$slug/notes.md"
+  printf 'staged' >"$STATE_DIR/work/$slug/.wabox/media/x.bin"
+
+  run state_json 0
+  [ "$(jq -r '.conversations[0].workdir_bytes' <<<"$output")" = "null" ]
+  [ "$(jq -r '.conversations[0].botdir_bytes' <<<"$output")" = "null" ]
+
+  run state_json 1
+  [ "$(jq -r '.conversations[0].workdir_bytes' <<<"$output")" -gt 0 ]
+  [ "$(jq -r '.conversations[0].botdir_bytes' <<<"$output")" -gt 0 ]
+  # botdir is a subset of the whole workdir.
+  wb="$(jq -r '.conversations[0].workdir_bytes' <<<"$output")"
+  bb="$(jq -r '.conversations[0].botdir_bytes' <<<"$output")"
+  [ "$wb" -ge "$bb" ]
+}
+
+@test "state_cli --sizes requires --json and forwards the flag" {
+  run state_cli --sizes
+  [ "$status" -eq 1 ]
+  run state_cli --json --sizes
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.conversations | type' <<<"$output")" = "array" ]
+}
+
 @test "conversations are sorted by last_message.at desc, nulls last" {
   seed_conv "older" "a@s.whatsapp.net" 1000 "old"
   seed_conv "newer" "b@s.whatsapp.net" 2000 "new"

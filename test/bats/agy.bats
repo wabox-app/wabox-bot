@@ -50,9 +50,9 @@ teardown() {
 }
 
 @test "agy_compose_prompt prepends an image pointer and keeps the caption" {
-  run agy_compose_prompt "what is this?" "wabox-media/p.jpg" "image"
+  run agy_compose_prompt "what is this?" ".wabox/media/p.jpg" "image"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"wabox-media/p.jpg"* ]]
+  [[ "$output" == *".wabox/media/p.jpg"* ]]
   [[ "$output" == *"what is this?"* ]]
 }
 

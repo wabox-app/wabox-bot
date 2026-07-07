@@ -52,7 +52,7 @@ state_slug_locked() {
 # own fragment (session/overrides/pending_permission), or the null default when
 # the backend doesn't implement backend_state_json.
 _state_conversation_json() {
-  local slug="$1"
+  local slug="$1" with_sizes="${2:-0}"
 
   local conv_key="" has_conv_key=false
   if [[ -s "$SESSIONS_DIR/$slug/conv_key" ]]; then
@@ -83,6 +83,18 @@ _state_conversation_json() {
     fi
   fi
 
+  # Sizes are opt-in (--sizes): du -sb per conversation is what makes the plain
+  # `state` call slow on large workdirs, so keep it off the fast path. Fields
+  # are always present (null without the flag) so the schema stays version: 1.
+  # workdir_bytes = the whole conversation folder; botdir_bytes = the reclaimable
+  # `.wabox/` share (what gc can prune), so a caller can tell agent content apart
+  # from bot plumbing. Read-only: workdir_botdir_path never creates the dir.
+  local workdir_bytes=null botdir_bytes=null
+  if ((with_sizes)); then
+    workdir_bytes="$(dir_bytes "$workdir")"
+    botdir_bytes="$(dir_bytes "$(workdir_botdir_path "$workdir")")"
+  fi
+
   jq -n \
     --arg slug "$slug" \
     --arg conv_key "$conv_key" \
@@ -91,6 +103,8 @@ _state_conversation_json() {
     --argjson is_default "$is_default" \
     --argjson locked "$locked" \
     --argjson last_message "$last_message" \
+    --argjson workdir_bytes "$workdir_bytes" \
+    --argjson botdir_bytes "$botdir_bytes" \
     --argjson backend "$backend_frag" \
     '{
        slug: $slug,
@@ -98,12 +112,15 @@ _state_conversation_json() {
        workdir: $workdir,
        workdir_is_default: $is_default,
        locked: $locked,
-       last_message: $last_message
+       last_message: $last_message,
+       workdir_bytes: $workdir_bytes,
+       botdir_bytes: $botdir_bytes
      } + $backend'
 }
 
-# Emit the whole snapshot on stdout.
+# Emit the whole snapshot on stdout. $1 (0/1) toggles per-conversation sizes.
 state_json() {
+  local with_sizes="${1:-0}"
   local running=false pid_json=null
   if state_daemon_running; then
     running=true
@@ -131,7 +148,7 @@ state_json() {
   local d slug
   for d in "$SESSIONS_DIR"/*/; do
     slug="$(basename -- "$d")"
-    conv_objs+=("$(_state_conversation_json "$slug")")
+    conv_objs+=("$(_state_conversation_json "$slug" "$with_sizes")")
   done
 
   { ((${#conv_objs[@]})) && printf '%s\n' "${conv_objs[@]}"; } |
@@ -142,12 +159,14 @@ state_json() {
         conversations: (sort_by(.last_message.at // -1) | reverse)}'
 }
 
-# CLI entry point for the `state` subcommand. Only `--json` is supported in v1.
+# CLI entry point for the `state` subcommand. `--json` is required; `--sizes`
+# additionally populates per-conversation byte counts (opt-in — it runs du).
 state_cli() {
-  local want_json=0
+  local want_json=0 with_sizes=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --json) want_json=1; shift ;;
+      --sizes) with_sizes=1; shift ;;
       *)
         printf 'wabox-bot state: unknown argument: %s\n' "$1" >&2
         return 1
@@ -158,5 +177,5 @@ state_cli() {
     printf 'wabox-bot state: --json is required (only JSON output is supported in v1)\n' >&2
     return 1
   fi
-  state_json
+  state_json "$with_sizes"
 }

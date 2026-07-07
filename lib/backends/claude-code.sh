@@ -243,7 +243,7 @@ cc_run_turn() {
   # there to this turn's reply — see lib/senddir.sh / lib/inbox.sh.
   if [[ "$CC_ADVERTISE_SEND_DIR" == "1" ]]; then
     cmd+=(--append-system-prompt \
-      "To send the user a file over WhatsApp, write it to $workdir/${WABOX_SEND_DIR:-wabox-send}/ — any file you leave in that folder is attached to your reply and delivered.")
+      "To send the user a file over WhatsApp, write it to $(senddir_path "$workdir")/ — any file you leave in that folder is attached to your reply and delivered.")
   fi
   local model_override
   model_override="$(cc_model_for "$slug" || true)"

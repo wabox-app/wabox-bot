@@ -10,19 +10,21 @@ media_type_of() { jq -r '.media.type     // empty' <<<"$1"; }
 media_file_of() { jq -r '.media.file     // empty' <<<"$1"; }
 media_mime_of() { jq -r '.media.mimetype // empty' <<<"$1"; }
 
-# Copy the media file into <workdir>/wabox-media/ and print the path relative
-# to <workdir> — the backend cd's there, so a relative path is what it needs.
-# The caller passes the path already moved to $PROCESSED_DIR; we copy (not move)
-# so the audit trail is preserved. Returns non-zero if the source
-# is missing.
+# Copy the media file into <workdir>/.wabox/<WABOX_MEDIA_DIR>/ and print the
+# path relative to <workdir> (e.g. .wabox/media/foo.jpg) — the backend cd's
+# there, so a relative path is what it needs. The caller passes the path already
+# moved to $PROCESSED_DIR; we copy (not move) so the audit trail is preserved.
+# Returns non-zero if the source is missing.
 media_stage() {
   local src="$1" workdir="$2" name dest_dir
   [[ -f "$src" ]] || return 1
   name="$(basename -- "$src")"
-  dest_dir="$workdir/wabox-media"
+  dest_dir="$(workdir_botdir "$workdir")/${WABOX_MEDIA_DIR:-media}"
   mkdir -p "$dest_dir"
   cp -f -- "$src" "$dest_dir/$name"
-  printf 'wabox-media/%s' "$name"
+  # Relative to the workdir root: strip the workdir prefix off the absolute
+  # dest, so the printed path stays valid after the backend's cd.
+  printf '%s/%s' "${dest_dir#"$workdir"/}" "$name"
 }
 
 # Transcribe an audio file via $WABOX_TRANSCRIBE_CMD. The command is

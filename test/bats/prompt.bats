@@ -128,7 +128,7 @@ assert_outbox_empty() {
   setup_echo
   backend_reply() {
     local wd; wd="$(conversation_workdir "$SLUG")"
-    printf 'data' >"$wd/${WABOX_SEND_DIR:-wabox-send}/out.txt"
+    printf 'data' >"$wd/.wabox/${WABOX_SEND_DIR:-send}/out.txt"
     printf 'here is your file'
   }
   run prompt_main "$SLUG" "gimme the report"

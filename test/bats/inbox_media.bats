@@ -30,7 +30,7 @@ mk_envelope() {
     "$stem.jpg"
   handle_envelope "$WABOX_INBOX/$stem.json"
   [ -f "$WABOX_OUTBOX/$stem.json" ]
-  [ -f "$STATE_DIR/work/$SLUG/wabox-media/$stem.jpg" ]
+  [ -f "$STATE_DIR/work/$SLUG/.wabox/media/$stem.jpg" ]
 }
 
 @test "audio message is transcribed via WABOX_TRANSCRIBE_CMD and sent as text" {

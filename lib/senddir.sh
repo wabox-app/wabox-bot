@@ -1,6 +1,6 @@
-# Outgoing-file staging (the <workdir>/wabox-send/ convention).
+# Outgoing-file staging (the <workdir>/.wabox/send/ convention).
 #
-# Files an agent writes into <workdir>/$WABOX_SEND_DIR/ during a turn are
+# Files an agent writes into <workdir>/.wabox/$WABOX_SEND_DIR/ during a turn are
 # attached to its reply (see lib/inbox.sh). This module owns that folder's
 # lifecycle so the wiring in inbox.sh stays testable in isolation:
 #
@@ -14,11 +14,13 @@
 # dot-prefixed `.sent/<stem>/` (which the attach glob skips) at the next turn's
 # start. The model never names files here — the loop attaches whatever landed.
 
-# The send folder for a workdir. Name configurable (relative to the workdir);
-# a leading-dot or absolute WABOX_SEND_DIR would break the archive/glob logic,
-# so it's treated as a plain relative folder name.
+# The send folder for a workdir: <workdir>/.wabox/<WABOX_SEND_DIR>. The name
+# is configurable (relative to `.wabox/`); a leading-dot or absolute
+# WABOX_SEND_DIR would break the archive/glob logic, so it's a plain folder
+# name. Routed through workdir_botdir so `.sent/` archives never litter the
+# user's own folder after /cwd.
 senddir_path() {
-  printf '%s/%s' "$1" "${WABOX_SEND_DIR:-wabox-send}"
+  printf '%s/%s' "$(workdir_botdir "$1")" "${WABOX_SEND_DIR:-send}"
 }
 
 # Ready the send folder for a turn: create it, and archive any non-hidden

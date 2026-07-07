@@ -67,49 +67,49 @@ mk_text() {
 
 # ---- outgoing files -------------------------------------------------------
 
-@test "files: a file the backend drops in wabox-send/ is attached as an absolute path, caption = reply" {
+@test "files: a file the backend drops in .wabox/send/ is attached as an absolute path, caption = reply" {
   backend_reply() {
     local slug="$1" wd
     wd="$(conversation_workdir "$slug")"
-    printf 'PDF' >"$wd/wabox-send/report.pdf"
+    printf 'PDF' >"$wd/.wabox/send/report.pdf"
     printf 'here is your report'
   }
   mk_text "f1" "$DM" "M5" "make a report" ""
   handle_envelope "$WABOX_INBOX/f1.json"
   [ "$(jq -r '.text' "$WABOX_OUTBOX/f1.json")" = "here is your report" ]
   [ "$(jq -r '.files | length' "$WABOX_OUTBOX/f1.json")" = "1" ]
-  [ "$(jq -r '.files[0]' "$WABOX_OUTBOX/f1.json")" = "$STATE_DIR/work/$DM_SLUG/wabox-send/report.pdf" ]
+  [ "$(jq -r '.files[0]' "$WABOX_OUTBOX/f1.json")" = "$STATE_DIR/work/$DM_SLUG/.wabox/send/report.pdf" ]
 }
 
 @test "files: an empty reply with files present becomes a files-only job" {
   backend_reply() {
     local slug="$1" wd
     wd="$(conversation_workdir "$slug")"
-    printf 'PNG' >"$wd/wabox-send/chart.png"
+    printf 'PNG' >"$wd/.wabox/send/chart.png"
     printf ''
   }
   mk_text "f2" "$DM" "M6" "chart it" ""
   handle_envelope "$WABOX_INBOX/f2.json"
   [ "$(jq -r 'has("text")' "$WABOX_OUTBOX/f2.json")" = "false" ]
-  [ "$(jq -r '.files[0]' "$WABOX_OUTBOX/f2.json")" = "$STATE_DIR/work/$DM_SLUG/wabox-send/chart.png" ]
+  [ "$(jq -r '.files[0]' "$WABOX_OUTBOX/f2.json")" = "$STATE_DIR/work/$DM_SLUG/.wabox/send/chart.png" ]
 }
 
 @test "files: an errored turn attaches nothing and keeps its partial output" {
   backend_reply() {
     local slug="$1" wd
     wd="$(conversation_workdir "$slug")"
-    printf 'partial' >"$wd/wabox-send/partial.pdf"
+    printf 'partial' >"$wd/.wabox/send/partial.pdf"
     return 1
   }
   mk_text "f3" "$DM" "M7" "boom" ""
   handle_envelope "$WABOX_INBOX/f3.json"
   [ "$(jq -r 'has("files")' "$WABOX_OUTBOX/f3.json")" = "false" ]
   # partial output stays in the folder for archival on the next turn
-  [ -f "$STATE_DIR/work/$DM_SLUG/wabox-send/partial.pdf" ]
+  [ -f "$STATE_DIR/work/$DM_SLUG/.wabox/send/partial.pdf" ]
 }
 
 @test "files: a leftover from a prior turn is archived, not re-attached" {
-  local send="$STATE_DIR/work/$DM_SLUG/wabox-send"
+  local send="$STATE_DIR/work/$DM_SLUG/.wabox/send"
   mkdir -p "$send"
   printf 'stale' >"$send/stale.pdf"
   backend_reply() { printf 'clean turn'; }

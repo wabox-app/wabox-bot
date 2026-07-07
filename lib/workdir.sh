@@ -79,3 +79,77 @@ workdir_display() {
     printf '%s (default)' "$STATE_DIR/work/$slug"
   fi
 }
+
+# ---- Bot plumbing dir (.wabox/) ----------------------------------------------
+# All bot-owned plumbing (staged inbound media, outgoing-file staging + its
+# archives) lives under one hidden dir per workdir so it never litters the
+# user's own folder after /cwd. This is the *only* place the name ".wabox"
+# is written — everything else routes through these helpers.
+_WABOX_BOTDIR_NAME=.wabox
+
+# Pure path — no mkdir, no migration. Read-only callers (state --sizes,
+# /status, gc, rm) use this so they never materialize an empty .wabox/ as a
+# side effect.
+workdir_botdir_path() {
+  printf '%s/%s' "$1" "$_WABOX_BOTDIR_NAME"
+}
+
+# One-time migration of the flat legacy layout (`wabox-send/`, `wabox-media/`
+# at the workdir root) into `.wabox/`. Those names shipped for only a few
+# hours, so we walk them back cheaply: move each into `.wabox/` and leave a
+# relative compat symlink at the old name, keeping any in-flight outbox job
+# (which holds an absolute path through the old name) and muscle memory working.
+# A name that's already a symlink (migrated) or a destination that already
+# exists is left untouched — this runs on every resolution and must be a no-op
+# once done. gc removes the dangling symlinks after the next minor release.
+_workdir_migrate_legacy() {
+  local wd="$1" botdir="$2" pair legacy new
+  local -a pairs=("wabox-send:${WABOX_SEND_DIR:-send}" "wabox-media:${WABOX_MEDIA_DIR:-media}")
+  for pair in "${pairs[@]}"; do
+    legacy="$wd/${pair%%:*}"
+    new="$botdir/${pair#*:}"
+    if [[ -d "$legacy" && ! -L "$legacy" && ! -e "$new" ]]; then
+      mv -- "$legacy" "$new" 2>/dev/null || continue
+      ln -s "$_WABOX_BOTDIR_NAME/${pair#*:}" "$legacy" 2>/dev/null || true
+    fi
+  done
+}
+
+# Resolve (and create) the `.wabox/` plumbing dir for a workdir, running the
+# one-time legacy migration. Write-path callers (senddir/media staging) use
+# this. Prints the absolute path with no trailing newline.
+workdir_botdir() {
+  local wd="$1" botdir
+  botdir="$(workdir_botdir_path "$wd")"
+  mkdir -p "$botdir"
+  _workdir_migrate_legacy "$wd" "$botdir"
+  printf '%s' "$botdir"
+}
+
+# ---- Sizes -------------------------------------------------------------------
+# Apparent size in bytes of a directory (du -sb); 0 when the path is absent.
+# du does not follow symlinks out of the tree by default, so a /cwd workdir's
+# links can't inflate the count.
+dir_bytes() {
+  local d="$1" out
+  [[ -d "$d" ]] || { printf '0'; return 0; }
+  out="$(du -sb -- "$d" 2>/dev/null | cut -f1)"
+  [[ "$out" =~ ^[0-9]+$ ]] || out=0
+  printf '%s' "$out"
+}
+
+# Human-readable bytes for chat/status output, pt-BR decimal comma:
+# 0 B / 12 KB / 800 MB / 1,2 GB. 1024 steps; one decimal past KB, trimmed
+# when it would be ",0".
+human_bytes() {
+  awk -v b="${1:-0}" 'BEGIN {
+    split("B KB MB GB TB PB", u, " ")
+    i = 1; v = b + 0
+    while (v >= 1024 && i < 6) { v /= 1024; i++ }
+    if (i == 1) { printf "%d %s", v, u[i]; exit }
+    v = sprintf("%.1f", v)
+    if (v ~ /\.0$/) v = int(v)
+    sub(/\./, ",", v)
+    printf "%s %s", v, u[i]
+  }'
+}
