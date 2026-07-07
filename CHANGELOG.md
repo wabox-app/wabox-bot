@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-07-06
+
+### Fixed
+
+- Test isolation: `setup_lib` now points `WABOX_BOT_CONFIG` at a guaranteed-absent
+  path so `load_core` never sources the developer's real
+  `~/.config/wabox-bot/config`. Previously a local config that set a non-default
+  knob (e.g. `WABOX_ACK_REACT`) leaked into the suite and failed tests that
+  assume stock defaults — green in CI, red on a configured machine.
+
 ## [0.7.0] - 2026-07-06
 
 ### Added
@@ -240,7 +250,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `install.sh` one-liner: clones to `~/.local/share/wabox-bot`, symlinks
   `bin/wabox-bot` into `~/.local/bin/`.
 
-[Unreleased]: https://github.com/wabox-app/wabox-bot/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/wabox-app/wabox-bot/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/wabox-app/wabox-bot/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/wabox-app/wabox-bot/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/wabox-app/wabox-bot/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/wabox-app/wabox-bot/compare/v0.4.0...v0.5.0

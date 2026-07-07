@@ -12,6 +12,12 @@ setup_lib() {
   export WABOX_OUTBOX="$TMPDIR_TEST/out"
   export STATE_DIR="$TMPDIR_TEST/state"
   export LOG_FILE="$TMPDIR_TEST/log"
+  # Isolate from the developer's real ~/.config/wabox-bot/config: without this,
+  # load_core → config.sh would source it and inherit whatever knobs it sets
+  # (e.g. WABOX_ACK_REACT), breaking tests that assume stock defaults. Point at
+  # a guaranteed-absent path; config.sh only sources an existing file. Tests
+  # that want a config (config.bats) export their own after calling setup_lib.
+  export WABOX_BOT_CONFIG="$TMPDIR_TEST/no-config"
   mkdir -p "$WABOX_INBOX" "$WABOX_OUTBOX"
 
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
