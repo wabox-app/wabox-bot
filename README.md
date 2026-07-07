@@ -57,8 +57,10 @@ git clone https://github.com/wabox-app/wabox-bot ~/wabox-bot
 curl -fsSL https://raw.githubusercontent.com/wabox-app/wabox-bot/main/install.sh | bash
 ```
 
-This clones into `~/.local/share/wabox-bot` and symlinks `bin/wabox-bot` into
-`~/.local/bin/`. Uninstall:
+This clones into `~/.local/share/wabox-bot`, checks out the latest published
+`vX.Y.Z` tag (the same release `--update` tracks; it falls back to
+`WABOX_BOT_BRANCH` when none is tagged), and symlinks `bin/wabox-bot` into
+`~/.local/bin/`. Re-run it any time to update. Uninstall:
 
 ```bash
 rm -rf ~/.local/share/wabox-bot ~/.local/bin/wabox-bot
