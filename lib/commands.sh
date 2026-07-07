@@ -4,7 +4,7 @@
 #   0 — input was a slash command, response has been written to the outbox
 #   1 — input is NOT a slash command (caller should hand off to backend_reply)
 #
-# Core owns /clear, /reset, /ping, /status, /help. Everything else is offered
+# Core owns /clear, /reset, /ping, /status, /help, /update. Everything else is offered
 # to backend_handle_command, which returns 99 if it doesn't recognise it; the
 # dispatcher then writes the canonical "Unknown command" reply.
 #
@@ -59,6 +59,12 @@ workdir: $(workdir_display "$slug")"
         status_text+="
 $(backend_status_lines "$slug")"
       fi
+      # Surface the cached startup update check (written by update_startup_notice)
+      # without a live network call on every /status.
+      if [[ -s "$STATE_DIR/update-available" ]]; then
+        status_text+="
+update:  v$(cat -- "$STATE_DIR/update-available") available — send /update now"
+      fi
       reply_path="$(write_outbox "$to" "$status_text" "$id" "$stem")"
       log_info "[$stem] /status → $reply_path"
       return 0
@@ -68,6 +74,7 @@ $(backend_status_lines "$slug")"
 /clear           forget this conversation and start fresh
 /status          show session id, model, mode, system prompt
 /cwd <path>      set this conversation's working folder (/cwd default to reset)
+/update          check for a newer wabox-bot release (/update now to apply)
 /ping            quick liveness check"
       if declare -f backend_help >/dev/null; then
         help_text+="
@@ -135,6 +142,51 @@ Usage:
         "Working folder for this conversation set to: $cwd_path" \
         "$id" "$stem")"
       log_info "[$stem] /cwd → $cwd_path → $reply_path"
+      return 0
+      ;;
+    /update)
+      # Gate the self-update behind an opt-out toggle: it runs `git reset --hard`
+      # on the install, so an instance exposed to untrusted chats can disable it.
+      if [[ "${WABOX_BOT_ALLOW_REMOTE_UPDATE:-1}" != 1 ]]; then
+        reply_path="$(write_outbox "$to" \
+          "Self-update over WhatsApp is disabled on this instance (WABOX_BOT_ALLOW_REMOTE_UPDATE=0)." \
+          "$id" "$stem")"
+        log_info "[$stem] /update refused (remote update disabled) → $reply_path"
+        return 0
+      fi
+      local upd_latest upd_rc=0 upd_msg
+      upd_latest="$(update_check)" || upd_rc=$?
+      case "$cmd_args" in
+        now | yes | sim | apply | confirm)
+          # Applying only rewrites the files on disk; this already-running daemon
+          # keeps executing the old code until it's restarted — say so plainly.
+          local upd_out upd_arc=0
+          upd_out="$(update_apply)" || upd_arc=$?
+          if ((upd_arc == 0)); then
+            upd_msg="Updated to v$(wabox_bot_version). Restart the daemon for it to take effect (it's still running the old code until then)."
+            log_info "[$stem] /update now → applied v$(wabox_bot_version)"
+          else
+            upd_msg="Update failed.
+$upd_out"
+            log_warn "[$stem] /update now failed (rc=$upd_arc)"
+          fi
+          ;;
+        "" | check | status)
+          case "$upd_rc" in
+            0)  upd_msg="wabox-bot v$(wabox_bot_version) is up to date." ;;
+            10) upd_msg="A newer version is available: v$upd_latest (you have v$(wabox_bot_version)).
+Reply /update now to apply it. (Takes effect after the daemon restarts.)" ;;
+            *)  upd_msg="Couldn't check for updates right now (offline?). Reply /update now to try applying anyway." ;;
+          esac
+          ;;
+        *)
+          upd_msg="Usage:
+/update          check for a newer release
+/update now      download and apply it"
+          ;;
+      esac
+      reply_path="$(write_outbox "$to" "$upd_msg" "$id" "$stem")"
+      log_info "[$stem] /update ($cmd_args) → $reply_path"
       return 0
       ;;
     *)

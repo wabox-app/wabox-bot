@@ -17,8 +17,8 @@ takes care of:
 - **Single-instance locking** so two daemons can't fight over the same inbox.
 - **Per-conversation locking** so messages from one sender process in order
   while different senders run in parallel.
-- **Slash commands** (`/clear`, `/status`, `/ping`, `/help`, `/cwd`, plus
-  backend-owned ones like `/model`, `/mode`, `/system` for the Claude Code
+- **Slash commands** (`/clear`, `/status`, `/ping`, `/help`, `/cwd`, `/update`,
+  plus backend-owned ones like `/model`, `/mode`, `/system` for the Claude Code
   backend).
 - **Per-conversation working folder** — each conversation's agent runs in its
   own directory (auto `$STATE_DIR/work/<slug>` by default), so file operations
@@ -52,6 +52,22 @@ This clones into `~/.local/share/wabox-bot` and symlinks `bin/wabox-bot` into
 ```bash
 rm -rf ~/.local/share/wabox-bot ~/.local/bin/wabox-bot
 ```
+
+### Updating
+
+```bash
+wabox-bot --check-update   # is a newer release published? (exit 0/10/1)
+wabox-bot --update         # upgrade in place (git reset --hard to origin/main)
+```
+
+`--update` is the same `fetch` + `reset --hard` `install.sh` runs, so re-running
+the one-liner works too. It prompts for confirmation on a terminal
+(`WABOX_BOT_ASSUME_YES=1` to skip) and refuses to discard local changes in a dev
+checkout unless `WABOX_BOT_UPDATE_FORCE=1`. The running daemon also checks on
+startup and logs a notice (and shows it in `/status`) when a newer release
+exists; disable with `WABOX_BOT_UPDATE_CHECK=0`. Over WhatsApp, `/update` checks
+and `/update now` applies (gated by `WABOX_BOT_ALLOW_REMOTE_UPDATE`, default on) —
+restart the daemon afterward for the new code to take effect.
 
 ## Requirements
 

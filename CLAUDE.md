@@ -109,7 +109,7 @@ The `claude-code` backend stores `session`/`model`/`mode`/`system` files there a
 sanitizes `/model` and `/mode` values with a regex before passing them to `claude`
 (they go straight to `--model` / `--permission-mode`).
 
-Core owns `/clear`, `/reset`, `/ping`, `/status`, `/help`; `/help` and `/status`
+Core owns `/clear`, `/reset`, `/ping`, `/status`, `/help`, `/update`; `/help` and `/status`
 aggregate backend-supplied lines, and `/clear` also calls `backend_clear`.
 
 ## Conventions

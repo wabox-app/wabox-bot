@@ -23,6 +23,14 @@ GROUP_PER_PARTICIPANT="${GROUP_PER_PARTICIPANT:-0}"      # 1 = thread per person
 SHUTDOWN_DRAIN_TIMEOUT="${SHUTDOWN_DRAIN_TIMEOUT:-180}"  # seconds to drain on stop
 DEBUG="${DEBUG:-0}"                                      # 1 = verbose logging
 
+# ── Self-update ───────────────────────────────────────────────────────────────
+# On startup the daemon checks (backgrounded, best-effort) for a newer published
+# release and logs a notice; `wabox-bot --update` applies it. See README.
+# WABOX_BOT_UPDATE_CHECK="${WABOX_BOT_UPDATE_CHECK:-1}"      # 0 = no startup check
+# WABOX_BOT_ALLOW_REMOTE_UPDATE="${WABOX_BOT_ALLOW_REMOTE_UPDATE:-1}"  # 0 = disable /update over WhatsApp
+# WABOX_BOT_UPDATE_NET_TIMEOUT="${WABOX_BOT_UPDATE_NET_TIMEOUT:-8}"    # seconds for the git reach
+# WABOX_BOT_REPO / WABOX_BOT_BRANCH override the upstream (default: wabox-app/wabox-bot, main)
+
 # ── Backend: claude-code ──────────────────────────────────────────────────────
 CLAUDE_BIN="${CLAUDE_BIN:-claude}"
 # `default` surfaces permission requests to you over WhatsApp (the bot asks

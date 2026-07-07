@@ -22,6 +22,14 @@ LIB_DIR="$ROOT/lib"
 # shellcheck source=lib/version.sh
 source "$LIB_DIR/version.sh"
 
+# Self-update lives alongside version resolution: --update / --check-update must
+# work before config/log setup, and the daemon + /update slash command reuse the
+# same functions. It has no source-time dependencies beyond version.sh (repo/
+# branch knobs are read inside the functions), so sourcing it here covers every
+# path — the flags below, the `cmd` subcommand's /update, and the daemon.
+# shellcheck source=lib/update.sh
+source "$LIB_DIR/update.sh"
+
 # --version output: the VERSION file value, plus the short git commit when we're
 # running from a checkout (dev builds). git is optional — its absence just drops
 # the suffix.
@@ -52,6 +60,11 @@ Options:
                       default: \${XDG_CONFIG_HOME:-~/.config}/wabox-bot/config).
   --init-config       write the config template to that path and exit.
   --print-config      print effective config values (secrets masked) and exit.
+  --check-update      check whether a newer release is published, then exit
+                      (0 up to date, 10 newer available, 1 undetermined).
+  --update            update the install to the latest release (git reset --hard
+                      to origin/main, as install.sh does), then exit. Prompts for
+                      confirmation on a terminal; set WABOX_BOT_ASSUME_YES=1 to skip.
   -v, --version       print the installed version and exit
   -h, --help          show this message and exit
 
@@ -156,6 +169,16 @@ while [[ $# -gt 0 ]]; do
       MODE="print-config"
       shift
       ;;
+    --check-update)
+      # No config or dependency setup needed — just git + network. Exits with the
+      # update_cli_check contract (0 / 10 / 1) so scripts can branch on it.
+      update_cli_check
+      exit $?
+      ;;
+    --update)
+      update_cli_apply
+      exit $?
+      ;;
     -v | --version)
       print_version
       exit 0
@@ -254,5 +277,9 @@ source "$LIB_DIR/commands.sh"
 source "$LIB_DIR/inbox.sh"
 # shellcheck source=lib/loop.sh
 source "$LIB_DIR/loop.sh"
+
+# Best-effort, backgrounded check for a newer release — logs a notice and caches
+# it for /status. Never blocks startup; a no-op when WABOX_BOT_UPDATE_CHECK=0.
+update_startup_notice
 
 run_main_loop

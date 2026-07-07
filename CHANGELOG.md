@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-06
+
+### Added
+
+- Self-update. `wabox-bot --check-update` reports whether a newer release is
+  published (exit `0` up to date, `10` newer available, `1` undetermined);
+  `wabox-bot --update` upgrades the install with the same `fetch` + `reset --hard`
+  to `origin/main` that `install.sh` runs, prompting for confirmation on a
+  terminal (skip with `WABOX_BOT_ASSUME_YES=1`). "Published" is the highest
+  `vX.Y.Z` tag read via `git ls-remote` — no `curl`/`wget`, no GitHub API. On
+  startup the daemon does a best-effort, backgrounded check and logs a notice
+  when a newer version exists (disable with `WABOX_BOT_UPDATE_CHECK=0`), also
+  surfaced in `/status`. A new core `/update` slash command checks over WhatsApp
+  and applies on `/update now` (gated by `WABOX_BOT_ALLOW_REMOTE_UPDATE`, default
+  on); an applied update takes effect only after the daemon restarts. `update_apply`
+  refuses to clobber a checkout with local changes unless `WABOX_BOT_UPDATE_FORCE=1`.
+
 ## [0.4.0] - 2026-07-06
 
 ### Added
@@ -158,7 +175,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `install.sh` one-liner: clones to `~/.local/share/wabox-bot`, symlinks
   `bin/wabox-bot` into `~/.local/bin/`.
 
-[Unreleased]: https://github.com/wabox-app/wabox-bot/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/wabox-app/wabox-bot/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/wabox-app/wabox-bot/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/wabox-app/wabox-bot/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/wabox-app/wabox-bot/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/wabox-app/wabox-bot/compare/v0.1.1...v0.2.0

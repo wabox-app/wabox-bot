@@ -28,6 +28,8 @@ teardown_lib() {
 load_core() {
   # shellcheck source=lib/version.sh
   source "$LIB_DIR/version.sh"
+  # shellcheck source=lib/update.sh
+  source "$LIB_DIR/update.sh"
   # shellcheck source=lib/config.sh
   source "$LIB_DIR/config.sh"
   # shellcheck source=lib/log.sh
