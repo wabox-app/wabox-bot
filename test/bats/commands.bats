@@ -25,6 +25,39 @@ teardown() {
   [[ "$text" == *"/model"* ]]
   [[ "$text" == *"/mode"* ]]
   [[ "$text" == *"/system"* ]]
+  [[ "$text" == *"/memory"* ]]
+}
+
+@test "/memory replies with the MEMORY.md content, monospace-wrapped" {
+  wd="$STATE_DIR/work/$SLUG"
+  mkdir -p "$wd"
+  printf '* my wife is Ana\n* reports go out Fridays\n' >"$wd/MEMORY.md"
+  handle_slash_command "/memory" "$SLUG" "$JID" "$JID" "MSG" "mem"
+  text="$(jq -r '.text' "$WABOX_OUTBOX/mem.json")"
+  [[ "$text" == '```'* ]]
+  [[ "$text" == *'```' ]]
+  [[ "$text" == *"my wife is Ana"* ]]
+  [[ "$text" == *"reports go out Fridays"* ]]
+}
+
+@test "/memory reports no memory when absent" {
+  handle_slash_command "/memory" "$SLUG" "$JID" "$JID" "MSG" "mem"
+  [ "$(jq -r '.text' "$WABOX_OUTBOX/mem.json")" = "Sem memória ainda." ]
+}
+
+@test "/memory does not create the workdir when there is no memory" {
+  handle_slash_command "/memory" "$SLUG" "$JID" "$JID" "MSG" "mem"
+  [ ! -d "$STATE_DIR/work/$SLUG" ]
+}
+
+@test "/memory truncates an oversize MEMORY.md" {
+  wd="$STATE_DIR/work/$SLUG"
+  mkdir -p "$wd"
+  head -c 4000 /dev/zero | tr '\0' 'x' >"$wd/MEMORY.md"
+  handle_slash_command "/memory" "$SLUG" "$JID" "$JID" "MSG" "mem"
+  text="$(jq -r '.text' "$WABOX_OUTBOX/mem.json")"
+  [[ "$text" == *"arquivo completo em"* ]]
+  [[ "$text" == *"$wd/MEMORY.md"* ]]
 }
 
 @test "/status reports the active backend and no session by default" {

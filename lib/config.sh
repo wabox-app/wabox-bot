@@ -91,6 +91,23 @@ case "$WABOX_QUOTE_REPLY" in
   *) WABOX_QUOTE_REPLY="auto" ;;
 esac
 
+# ---- Memory & skills (see docs/superpowers/specs/2026-07-06-memory-and-skills) --
+# A new *default* workdir (never a /cwd redirect) is seeded with this
+# instructions file teaching the agent WhatsApp etiquette (markup, chat-sized
+# replies), the send folder, and a memory practice. The claude-code backend
+# writes it as CLAUDE.md; agy/bob as AGENTS.md — same content, backend-picks-the-
+# name. Empty ⇒ seeding disabled. ROOT is set by the entrypoint; the fallback
+# derives the repo root from this file's location so the default resolves under
+# the test harness (which sources config.sh without ROOT) too.
+# Note the ${VAR-default} form (no colon): an *explicitly empty* value disables
+# seeding, so only a genuinely unset var falls back to the shipped template.
+WABOX_WORKDIR_TEMPLATE="${WABOX_WORKDIR_TEMPLATE-${ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}/templates/workdir-instructions.md}"
+# Consumed by the claude-code seed hook: a folder of shared agent skills
+# symlinked into every new workdir as .claude/skills (a symlink, not a copy —
+# update the one folder, every conversation follows). Curate it like code you
+# run: every conversation gets those skills. Empty ⇒ no symlink.
+CC_SHARED_SKILLS_DIR="${CC_SHARED_SKILLS_DIR:-}"
+
 mkdir -p "$STATE_DIR" "$SESSIONS_DIR" "$LOCKS_DIR" "$PROCESSED_DIR" \
   "$(dirname "$LOG_FILE")" "$WABOX_OUTBOX"
 

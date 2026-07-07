@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-07-06
+
+### Added
+
+- **Per-conversation memory & skills** — conventions that make a conversation
+  medium-aware and give it durable memory, with no new runtime machinery.
+  - A new conversation's **default** workdir is seeded (on its first agent turn)
+    with an instructions file teaching WhatsApp etiquette (WhatsApp markup, not
+    Markdown; chat-sized replies; long output to the send folder; match the
+    user's language) and a memory practice. `claude-code` writes it as
+    `CLAUDE.md`; `agy`/`bob` as `AGENTS.md`. Seed-if-absent — user/agent edits
+    always win. `/cwd`-redirected folders are never seeded.
+    `WABOX_WORKDIR_TEMPLATE` overrides the shipped template; empty disables it.
+  - Durable memory lives in `<workdir>/MEMORY.md`, one plain file per
+    conversation that **survives `/clear`**. The new read-only `/memory` command
+    shows it over WhatsApp (monospace-wrapped, truncated past 3000 chars).
+  - `CC_SHARED_SKILLS_DIR` symlinks a curated skills folder into every new
+    `claude-code` workdir as `.claude/skills`.
+  - New optional backend hook `backend_seed_workdir <slug> <workdir>`
+    (documented in `docs/backends.md`), dispatched from `conversation_workdir()`
+    for default workdirs only.
+
 ## [0.7.1] - 2026-07-06
 
 ### Fixed
@@ -250,7 +272,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `install.sh` one-liner: clones to `~/.local/share/wabox-bot`, symlinks
   `bin/wabox-bot` into `~/.local/bin/`.
 
-[Unreleased]: https://github.com/wabox-app/wabox-bot/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/wabox-app/wabox-bot/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/wabox-app/wabox-bot/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/wabox-app/wabox-bot/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/wabox-app/wabox-bot/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/wabox-app/wabox-bot/compare/v0.5.0...v0.6.0

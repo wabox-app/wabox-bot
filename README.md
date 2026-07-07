@@ -17,9 +17,9 @@ takes care of:
 - **Single-instance locking** so two daemons can't fight over the same inbox.
 - **Per-conversation locking** so messages from one sender process in order
   while different senders run in parallel.
-- **Slash commands** (`/clear`, `/status`, `/ping`, `/help`, `/cwd`, `/update`,
-  plus backend-owned ones like `/model`, `/mode`, `/system` for the Claude Code
-  backend).
+- **Slash commands** (`/clear`, `/status`, `/ping`, `/help`, `/cwd`, `/memory`,
+  `/update`, plus backend-owned ones like `/model`, `/mode`, `/system` for the
+  Claude Code backend).
 - **Per-conversation working folder** — each conversation's agent runs in its
   own directory (auto `$STATE_DIR/work/<slug>` by default), so file operations
   stay isolated. Redirect one with `/cwd <path>` (e.g. `/cwd ~/Valter`);
@@ -131,6 +131,8 @@ variables themselves are listed below.
 | `WABOX_SEND_DIR` | `wabox-send` | Folder (under each conversation's workdir) an agent drops files into to have them attached to its reply. |
 | `WABOX_SEND_KEEP_DAYS` | `7` | How long archived (`.sent/`) copies of sent files are kept before pruning. |
 | `WABOX_QUOTE_REPLY` | `auto` | Quote-reply policy: `auto` (groups, or when a backlog is queued), `always`, or `never`. |
+| `WABOX_WORKDIR_TEMPLATE` | shipped template | Instructions file seeded into a new default workdir (WhatsApp etiquette + memory practice). Empty ⇒ seeding off. |
+| `CC_SHARED_SKILLS_DIR` | (empty) | Folder of shared agent skills symlinked into every new `claude-code` workdir as `.claude/skills`. Empty ⇒ off. |
 
 Ready-made transcribers for `WABOX_TRANSCRIBE_CMD` (faster-whisper, whisper.cpp,
 OpenAI Whisper, Vosk, and any OpenAI-compatible API such as Groq) live in
@@ -169,6 +171,33 @@ prompt-injected "send this to …" has no channel to act through. A compromised
 agent can still copy files *it can already read* into the folder; that's the
 existing agent-permission boundary, so run the agent with a working directory and
 permissions you trust.
+
+## Memory & skills
+
+A new conversation's default workdir is seeded (on its first agent turn) with an
+instructions file teaching the agent how to behave over WhatsApp: use WhatsApp
+markup instead of Markdown (`*bold*`, `_italic_`, no headings or `[]()` links),
+keep replies chat-sized, push long output to the send folder, and match the
+user's language. The `claude-code` backend writes it as `CLAUDE.md`; `agy` and
+`bob` as `AGENTS.md` (both CLIs auto-load their file from the working folder). It
+is seed-if-absent — your edits, or the agent's, always win. Point
+`WABOX_WORKDIR_TEMPLATE` at your own file to customize it, or set it empty to
+seed nothing. Only *default* workdirs are seeded; a `/cwd`-redirected folder (the
+user's own directory) is left untouched.
+
+Durable memory lives in `<workdir>/MEMORY.md` — one plain file per conversation.
+The seeded instructions tell the agent to read it and to append short bullets for
+facts worth keeping ("my wife is Ana", "reports go out Fridays") and prune stale
+ones. Unlike session history, it **survives `/clear`**, so resetting a wedged or
+bloated session doesn't wipe what the agent knows about you. `/memory` shows the
+current file over WhatsApp; edit it in chat ("esqueça X") or with `$EDITOR`. It's
+a file you can `cat` and audit — deliberately not a hidden memory system.
+
+Shared skills: set `CC_SHARED_SKILLS_DIR` to a folder you curate (a git clone,
+whatever) and the `claude-code` backend symlinks it into every new workdir as
+`.claude/skills` — one folder, every conversation follows. Treat it like code you
+run: every chat gets those skills. A conversation can go local by replacing the
+symlink with a real directory.
 
 ## External tooling
 

@@ -94,3 +94,13 @@ assert_outbox_empty() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"Unknown command"* ]]
 }
+
+@test "/memory prints the conversation's MEMORY.md on stdout" {
+  local wd="$STATE_DIR/work/$SLUG"
+  mkdir -p "$wd"
+  printf '* remember this\n' >"$wd/MEMORY.md"
+  run cmd_main "$SLUG" "/memory"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"remember this"* ]]
+  assert_outbox_empty
+}

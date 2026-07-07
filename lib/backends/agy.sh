@@ -54,6 +54,19 @@ backend_check_dependencies() {
   need "$AGY_BIN"
 }
 
+# backend_seed_workdir <slug> <workdir> — seed a freshly-resolved *default*
+# workdir (core never calls this for a /cwd redirect). Cheap, idempotent, and
+# silent on stdout. agy reads AGENTS.md from cwd, so the shipped instructions
+# template (WhatsApp etiquette + memory practice) lands there when absent. No
+# skills symlink — that's claude-specific.
+backend_seed_workdir() {
+  local slug="$1" workdir="$2"
+  local template="${WABOX_WORKDIR_TEMPLATE:-}"
+  if [[ -n "$template" && -r "$template" && ! -e "$workdir/AGENTS.md" && ! -L "$workdir/AGENTS.md" ]]; then
+    cp -- "$template" "$workdir/AGENTS.md"
+  fi
+}
+
 # ---- Per-conversation state files ------------------------------------------
 #
 # All state lives under $(backend_state_dir "$slug"), which expands to

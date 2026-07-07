@@ -49,6 +49,34 @@ handle_slash_command() {
       log_info "[$stem] /ping → $reply_path"
       return 0
       ;;
+    /memory)
+      # Read-only window into the conversation's durable memory (MEMORY.md in
+      # the workdir — survives /clear, one file per conversation). Works for
+      # every backend; it's just a file. Resolve the path WITHOUT creating the
+      # dir (workdir_info's second line), so /memory never materializes a
+      # workdir as a side effect. Editing stays in chat or $EDITOR on the file.
+      local mem_dir mem_file mem_content fence='```'
+      mem_dir="$(workdir_info "$slug" | tail -n1)"
+      mem_file="$mem_dir/MEMORY.md"
+      if [[ ! -s "$mem_file" ]]; then
+        reply_path="$(write_outbox "$to" "Sem memória ainda." "$id" "$stem")"
+        log_info "[$stem] /memory (empty) → $reply_path"
+        return 0
+      fi
+      mem_content="$(cat -- "$mem_file")"
+      # Cap the reply so a large MEMORY.md can't blow past WhatsApp's message
+      # limit; point at the file on disk for the full text.
+      if ((${#mem_content} > 3000)); then
+        mem_content="${mem_content:0:3000}
+… (arquivo completo em $mem_file)"
+      fi
+      # Monospace-wrap so WhatsApp shows the raw markdown, not a rendering of it.
+      reply_path="$(write_outbox "$to" "$fence
+$mem_content
+$fence" "$id" "$stem")"
+      log_info "[$stem] /memory → $reply_path"
+      return 0
+      ;;
     /status)
       local status_text
       status_text="Status:
@@ -74,6 +102,7 @@ update:  v$(cat -- "$STATE_DIR/update-available") available — send /update now
 /clear           forget this conversation and start fresh
 /status          show session id, model, mode, system prompt
 /cwd <path>      set this conversation's working folder (/cwd default to reset)
+/memory          show what the agent remembers (MEMORY.md)
 /update          check for a newer wabox-bot release (/update now to apply)
 /ping            quick liveness check"
       if declare -f backend_help >/dev/null; then

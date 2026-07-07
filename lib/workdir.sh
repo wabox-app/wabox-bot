@@ -18,14 +18,27 @@ conversation_dir() {
 # its path. The default materializes here on a conversation's first agent
 # turn rather than eagerly for every conversation.
 conversation_workdir() {
-  local slug="$1" override_file dir
+  local slug="$1" override_file dir is_default=1
   override_file="$(conversation_dir "$slug")/workdir"
   if [[ -s "$override_file" ]]; then
     dir="$(cat -- "$override_file")"
+    is_default=0
   else
     dir="$STATE_DIR/work/$slug"
   fi
   mkdir -p "$dir"
+  # Seed a freshly-created *default* workdir via the backend's optional hook —
+  # its instructions file (WhatsApp etiquette + memory practice), shared skills,
+  # etc. Only auto defaults: a /cwd redirect points at the user's own folder and
+  # must never be written into. The hook is seed-if-absent and cheap-idempotent
+  # (the plan requires this — it runs on every resolution), so the cost is one
+  # stat per turn; a hook failure warns but never fails the turn. The hook must
+  # emit nothing on stdout, since callers capture this function's output.
+  if ((is_default)) && declare -f backend_seed_workdir >/dev/null; then
+    if ! backend_seed_workdir "$slug" "$dir"; then
+      log_warn "backend_seed_workdir failed for slug=$slug workdir=$dir"
+    fi
+  fi
   printf '%s' "$dir"
 }
 

@@ -43,6 +43,30 @@ backend_check_dependencies() {
   need "$CLAUDE_BIN"
 }
 
+# backend_seed_workdir <slug> <workdir> — seed a freshly-resolved *default*
+# workdir. Core only calls this for auto defaults (never a /cwd redirect), on
+# every turn, so it must be cheap and idempotent and emit nothing on stdout
+# (conversation_workdir's output is captured). Two seed-if-absent actions:
+#   1. Copy the shipped instructions template as CLAUDE.md — claude auto-loads
+#      CLAUDE.md from cwd, so this teaches WhatsApp etiquette + memory practice.
+#   2. When CC_SHARED_SKILLS_DIR points at a readable folder, symlink it as
+#      .claude/skills so every conversation shares one curated skill set.
+# Never touches an existing file or link (even a broken one) — the user's or the
+# agent's edits win forever.
+backend_seed_workdir() {
+  local slug="$1" workdir="$2"
+  local template="${WABOX_WORKDIR_TEMPLATE:-}"
+  if [[ -n "$template" && -r "$template" && ! -e "$workdir/CLAUDE.md" && ! -L "$workdir/CLAUDE.md" ]]; then
+    cp -- "$template" "$workdir/CLAUDE.md"
+  fi
+  local shared="${CC_SHARED_SKILLS_DIR:-}"
+  local skills="$workdir/.claude/skills"
+  if [[ -n "$shared" && -r "$shared" && ! -e "$skills" && ! -L "$skills" ]]; then
+    mkdir -p "$workdir/.claude"
+    ln -s -- "$shared" "$skills"
+  fi
+}
+
 # ---- Per-conversation state files ------------------------------------------
 #
 # All state lives under $(backend_state_dir "$slug"), which expands to

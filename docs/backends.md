@@ -84,6 +84,23 @@ backend_clear() {
   rm -f -- "$(backend_state_dir "$1")/session"
 }
 
+backend_seed_workdir() {
+  # Args: slug, workdir
+  # Called by conversation_workdir() right after it creates a conversation's
+  # *default* workdir — NEVER for a /cwd-redirected folder (that's the user's
+  # own directory; core guarantees it won't call you there). Runs on EVERY turn,
+  # so it must be cheap and strictly seed-if-absent (idempotent). It must emit
+  # NOTHING on stdout — conversation_workdir's output is captured by callers.
+  # A non-zero return is logged as a warning and never fails the turn.
+  # Typical use: drop an instructions file the agent auto-loads from cwd
+  # (CLAUDE.md for claude, AGENTS.md for agy/bob) from $WABOX_WORKDIR_TEMPLATE.
+  local slug="$1" workdir="$2"
+  [[ -n "${WABOX_WORKDIR_TEMPLATE:-}" && -r "$WABOX_WORKDIR_TEMPLATE" \
+     && ! -e "$workdir/AGENTS.md" ]] &&
+    cp -- "$WABOX_WORKDIR_TEMPLATE" "$workdir/AGENTS.md"
+  return 0
+}
+
 backend_help() {
   # Echo additional lines for /help, sandwiched between the core
   # "/clear /status /ping" block and the trailing "/help" line.

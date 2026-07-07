@@ -36,6 +36,20 @@ WABOX_SEND_KEEP_DAYS="${WABOX_SEND_KEEP_DAYS:-7}"
 # message for the same chat is still queued (so replies stay threaded).
 WABOX_QUOTE_REPLY="${WABOX_QUOTE_REPLY:-auto}"
 
+# ── Memory & skills ───────────────────────────────────────────────────────────
+# A new *default* workdir (not a /cwd redirect) is seeded with an instructions
+# file teaching the agent WhatsApp etiquette (markup, chat-sized replies), the
+# send folder, and a memory practice. claude-code writes it as CLAUDE.md; agy/bob
+# as AGENTS.md. Defaults to the shipped templates/workdir-instructions.md; set it
+# to empty to disable seeding. Seed-if-absent — your edits always win.
+# WABOX_WORKDIR_TEMPLATE=""
+# Durable memory lives in <workdir>/MEMORY.md: it survives /clear, and /memory
+# shows it over WhatsApp. The agent maintains it per the seeded instructions.
+# Shared skills (claude-code): a folder symlinked into every new workdir as
+# .claude/skills, so one curated set reaches every conversation. Treat it like
+# code you run — every chat gets those skills. Empty = off (default).
+CC_SHARED_SKILLS_DIR="${CC_SHARED_SKILLS_DIR:-}"
+
 # ── Self-update ───────────────────────────────────────────────────────────────
 # On startup the daemon checks (backgrounded, best-effort) for a newer published
 # release and logs a notice; `wabox-bot --update` applies it. See README.
