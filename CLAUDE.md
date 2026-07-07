@@ -26,12 +26,24 @@ bats test/bats/                       # whole suite
 bats test/bats/routing.bats           # one file
 bats test/bats/routing.bats -f "slug" # one test by name filter
 
+# Make shortcuts (thin wrappers, no build step)
+make lint                             # the shellcheck set above (+ scripts, plugins)
+make test                             # bats test/bats/
+make check                            # lint + test
+make release VERSION=X.Y.Z            # cut a release (see Releasing, below)
+
 # Run the daemon (needs a live wabox instance, or set the paths manually)
 export WABOX_INBOX=~/.local/share/wabox/inbox
 export WABOX_OUTBOX=~/.local/share/wabox/outbox
 bin/wabox-bot                         # default backend: claude-code
 bin/wabox-bot --backend echo          # smoke-test the loop without an LLM
 ```
+
+Releasing is `make release VERSION=X.Y.Z` — it runs the checks, then bumps
+`VERSION`, promotes `CHANGELOG.md` `[Unreleased]` → `[X.Y.Z]` (section **and**
+compare-link footer), commits `chore(release): vX.Y.Z`, and tags `vX.Y.Z`. It
+does not push. Never bump the version / cut a tag by hand — that's what drifts.
+See CONTRIBUTING.md.
 
 `lib/*.sh` core files are checked transitively by `shellcheck -x bin/wabox-bot`
 because the entrypoint sources them in order — don't shellcheck them individually.

@@ -51,14 +51,29 @@ Changelog entries live in [`CHANGELOG.md`](CHANGELOG.md) under the
 
 The version reported by `wabox-bot --version` (and the `daemon.wabox_bot_version`
 field of `wabox-bot state --json`) comes from the `VERSION` file at the repo
-root — that file is the single source of truth. Keep it, the CHANGELOG, and the
-git tag in lockstep. To cut version `X.Y.Z`:
+root — that file is the single source of truth. `VERSION`, the CHANGELOG (both
+its section headers **and** the compare-link footer), and the git tag must stay
+in lockstep.
 
-1. Write `X.Y.Z` into `VERSION` (bump per [SemVer](https://semver.org/): a new
-   feature ⇒ minor, a bug fix ⇒ patch).
-2. In `CHANGELOG.md`, rename `[Unreleased]` to `[X.Y.Z] - <date>` and add a fresh
-   empty `[Unreleased]` above it; update the compare links at the bottom.
-3. Commit (`chore(release): vX.Y.Z`) and tag: `git tag vX.Y.Z && git push --tags`.
+Cut a release with one command (bump per [SemVer](https://semver.org/): a new
+feature ⇒ minor, a bug fix ⇒ patch):
+
+```bash
+make release VERSION=X.Y.Z
+```
+
+That runs `make check` (shellcheck + bats), then — atomically —
+[`scripts/release.sh`](scripts/release.sh):
+
+1. writes `X.Y.Z` into `VERSION`;
+2. promotes `CHANGELOG.md` `[Unreleased]` to `[X.Y.Z] - <today>` (leaving a fresh
+   empty `[Unreleased]`) and rewrites the compare-link footer;
+3. commits (`chore(release): vX.Y.Z`) and creates the annotated tag `vX.Y.Z`.
+
+It refuses to cut an empty release or a dirty tree, and it does **not** push —
+it prints the exact `git push origin <branch> && git push origin vX.Y.Z` to run
+once you're happy. So a feature PR lands its changelog entry under
+`[Unreleased]`; the release is a separate, mechanical `make release`.
 
 The `install.sh` one-liner pins clones to a branch/tag, so the `VERSION` file in
 the checkout is exactly what `--version` reports on an installed copy; when run

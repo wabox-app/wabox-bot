@@ -19,6 +19,7 @@ jobs:
           shellcheck lib/backends/*.sh
           shellcheck install.sh
           shellcheck examples/aider.sh
+          shellcheck scripts/release.sh
           shellcheck plugins/*/transcribe.sh
           shellcheck config.example
 
