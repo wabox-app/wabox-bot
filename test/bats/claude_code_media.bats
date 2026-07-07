@@ -28,9 +28,24 @@ teardown() {
   [[ "$output" == *".wabox/media/p.jpg"* ]]
 }
 
-@test "cc_compose_prompt ignores a non-image media type" {
+@test "cc_compose_prompt ignores a non-image/document media type" {
   run cc_compose_prompt "transcript text" ".wabox/media/a.ogg" "audio"
   [ "$output" = "transcript text" ]
+}
+
+@test "cc_compose_prompt prepends a document instruction with the MIME and keeps the caption" {
+  run cc_compose_prompt "resume isso" ".wabox/media/c.pdf" "document" "application/pdf"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"read it and respond"* ]]
+  [[ "$output" == *".wabox/media/c.pdf"* ]]
+  [[ "$output" == *"application/pdf"* ]]
+  [[ "$output" == *"resume isso"* ]]
+}
+
+@test "cc_compose_prompt with a document and no caption is instruction-only" {
+  run cc_compose_prompt "" ".wabox/media/c.pdf" "document" "application/pdf"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *".wabox/media/c.pdf (application/pdf)"* ]]
 }
 
 @test "cc_compose_prompt is safe when path or caption contains a percent sign" {

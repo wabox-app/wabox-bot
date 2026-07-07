@@ -62,6 +62,15 @@ teardown() {
   [ "$output" = "hello" ]
 }
 
+@test "agy_compose_prompt prepends a document pointer with the MIME and keeps the caption" {
+  AGY_REPLY_PREFIX="" run agy_compose_prompt "resume isso" ".wabox/media/c.pdf" "document" "application/pdf"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"read it and respond"* ]]
+  [[ "$output" == *".wabox/media/c.pdf"* ]]
+  [[ "$output" == *"application/pdf"* ]]
+  [[ "$output" == *"resume isso"* ]]
+}
+
 @test "backend_reply returns agy's stdout" {
   output="$(printf "hi" | backend_reply "$SLUG" "conv" "stem")"
   [ "$output" = "the agy reply" ]

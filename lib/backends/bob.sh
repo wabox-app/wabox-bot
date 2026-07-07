@@ -106,18 +106,25 @@ bob_save_mode_for() {
   printf '%s\n' "$name" >"$(backend_state_dir "$slug")/mode"
 }
 
-# Compose the prompt fed to bob on stdin. With an image we prepend a short
-# instruction pointing the agent at the staged file using bob's `@path` file
-# reference syntax (path is already relative to the agent's cwd), then the
-# caption. Any other media type (audio is transcribed into text upstream)
-# passes the text through unchanged.
+# Compose the prompt fed to bob on stdin. With an image or a document we prepend
+# a short instruction pointing the agent at the staged file using bob's `@path`
+# file reference syntax (path is already relative to the agent's cwd), then the
+# caption. Any other media type (audio is transcribed into text upstream) passes
+# the text through unchanged.
 bob_compose_prompt() {
-  local text="$1" media_path="$2" media_type="$3"
-  if [[ "$media_type" == "image" && -n "$media_path" ]]; then
+  local text="$1" media_path="$2" media_type="$3" media_mime="${4:-}"
+  local line=""
+  if [[ -n "$media_path" ]]; then
+    case "$media_type" in
+      image)    line="The user sent an image at @$media_path — view it and respond." ;;
+      document) line="The user sent a file at @$media_path ($media_mime) — read it and respond." ;;
+    esac
+  fi
+  if [[ -n "$line" ]]; then
     if [[ -n "$text" ]]; then
-      printf 'The user sent an image at @%s — view it and respond.\n\n%s' "$media_path" "$text"
+      printf '%s\n\n%s' "$line" "$text"
     else
-      printf 'The user sent an image at @%s — view it and respond.' "$media_path"
+      printf '%s' "$line"
     fi
   else
     printf '%s' "$text"
@@ -131,7 +138,7 @@ bob_compose_prompt() {
 # user-visible error message).
 backend_reply() {
   local slug="$1" conv_key="$2" stem="$3"
-  local media_path="${4:-}" media_type="${5:-}"
+  local media_path="${4:-}" media_type="${5:-}" media_mime="${6:-}"
   local text
   text="$(cat)"
 
@@ -171,7 +178,7 @@ backend_reply() {
   fi
 
   local prompt
-  prompt="$(bob_compose_prompt "$text" "$media_path" "$media_type")"
+  prompt="$(bob_compose_prompt "$text" "$media_path" "$media_type" "$media_mime")"
   # Prompt goes on stdin (not argv) so multi-line text and leading dashes
   # can't be mis-parsed as flags. stderr (bob's thinking/progress) is logged.
   local response_json rc=0

@@ -66,6 +66,11 @@ KEEP_PROCESSED="${KEEP_PROCESSED:-1}"
 # transcript is read from stdout. Empty ⇒ audio messages are ignored.
 WABOX_TRANSCRIBE_CMD="${WABOX_TRANSCRIBE_CMD:-}"
 WABOX_TRANSCRIBE_TIMEOUT="${WABOX_TRANSCRIBE_TIMEOUT:-120}"
+# Inbound documents (PDFs, spreadsheets, text files) are staged like images and
+# handed to the backend to read. A document larger than this many MB is not
+# staged — the user gets a short "too big" notice instead of silence (and any
+# caption still goes through as text).
+WABOX_DOC_MAX_MB="${WABOX_DOC_MAX_MB:-100}"
 # Generic shutdown drain timeout — how long to give in-flight handlers to
 # finish on SIGTERM/SIGINT before escalating. Should be at least as long as
 # the longest backend reply timeout.

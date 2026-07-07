@@ -203,12 +203,19 @@ cc_has_pending_permission() {
 # then the caption. Any other media type (audio is already transcribed into
 # text upstream) passes the text through unchanged.
 cc_compose_prompt() {
-  local text="$1" media_path="$2" media_type="$3"
-  if [[ "$media_type" == "image" && -n "$media_path" ]]; then
+  local text="$1" media_path="$2" media_type="$3" media_mime="${4:-}"
+  local line=""
+  if [[ -n "$media_path" ]]; then
+    case "$media_type" in
+      image)    line="The user sent an image at $media_path — view it and respond." ;;
+      document) line="The user sent a file at $media_path ($media_mime) — read it and respond." ;;
+    esac
+  fi
+  if [[ -n "$line" ]]; then
     if [[ -n "$text" ]]; then
-      printf 'The user sent an image at %s — view it and respond.\n\n%s' "$media_path" "$text"
+      printf '%s\n\n%s' "$line" "$text"
     else
-      printf 'The user sent an image at %s — view it and respond.' "$media_path"
+      printf '%s' "$line"
     fi
   else
     printf '%s' "$text"
@@ -388,7 +395,7 @@ cc_handle_permission_response() {
 # user-visible error message).
 backend_reply() {
   local slug="$1" conv_key="$2" stem="$3"
-  local media_path="${4:-}" media_type="${5:-}"
+  local media_path="${4:-}" media_type="${5:-}" media_mime="${6:-}"
   local text
   text="$(cat)"
 
@@ -413,7 +420,7 @@ backend_reply() {
   fi
 
   local prompt
-  prompt="$(cc_compose_prompt "$text" "$media_path" "$media_type")"
+  prompt="$(cc_compose_prompt "$text" "$media_path" "$media_type" "$media_mime")"
   local response_json rc=0
   response_json="$(cc_run_turn "$slug" "$conv_key" "$stem" "$workdir" "$prompt")" || rc=$?
   if ((rc != 0)); then

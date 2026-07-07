@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-07-07
+
+### Added
+
+- **Inbound documents** — a `document` (PDF, spreadsheet, text file, …) is now
+  staged into the workdir and handed to the backend exactly like an image, so
+  "resume isso pra mim" over WhatsApp works. `media_type` in the backend
+  contract is now `image | document`; the composer sentence names the file and
+  its MIME (extension-less WhatsApp forwards are common).
+- **`WABOX_DOC_MAX_MB` (default 100)** — a document larger than this is not
+  staged; the user gets a short "too big" reply instead of silence, and any
+  caption still goes through as text. The guard checks the source before any
+  copy, so a 2 GB document is never blindly staged.
+
+### Fixed
+
+- Captions on unsupported media are no longer lost. A `video`, `sticker`, or any
+  future unknown type with caption text is now forwarded as a plain text turn
+  with a bracketed note (`[o usuário enviou um vídeo, que não consigo processar]`)
+  instead of being dropped with the caption. A bare unsupported message is still
+  a silent no-op, and such types are never copied into the workdir.
+
 ## [0.9.0] - 2026-07-07
 
 ### Added

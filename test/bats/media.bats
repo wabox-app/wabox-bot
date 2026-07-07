@@ -39,6 +39,27 @@ teardown() {
   [ "$status" -ne 0 ]
 }
 
+@test "media_size_mb rounds up: a 1-byte file is 1 MB" {
+  printf 'x' >"$TMPDIR_TEST/tiny"
+  run media_size_mb "$TMPDIR_TEST/tiny"
+  [ "$status" -eq 0 ]
+  [ "$output" = "1" ]
+}
+
+@test "media_size_mb: exactly 1 MiB is 1, one byte over is 2" {
+  head -c 1048576 /dev/zero >"$TMPDIR_TEST/onemb"
+  run media_size_mb "$TMPDIR_TEST/onemb"
+  [ "$output" = "1" ]
+  head -c 1048577 /dev/zero >"$TMPDIR_TEST/overmb"
+  run media_size_mb "$TMPDIR_TEST/overmb"
+  [ "$output" = "2" ]
+}
+
+@test "media_size_mb fails when the file is missing" {
+  run media_size_mb "$TMPDIR_TEST/nope"
+  [ "$status" -ne 0 ]
+}
+
 @test "media_transcribe runs WABOX_TRANSCRIBE_CMD with the audio path and returns stdout" {
   cat >"$TMPDIR_TEST/fake_stt.sh" <<'SH'
 #!/usr/bin/env bash

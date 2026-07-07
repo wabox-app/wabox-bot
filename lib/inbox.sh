@@ -155,8 +155,11 @@ handle_envelope() {
 
   # ---- Step 4b: media handling ------------------------------------------
   # media_file was read in step 2 and the file moved to $PROCESSED_DIR in
-  # step 3. Audio is transcribed here (generic → becomes text); an image is
-  # staged and passed to the backend by reference. Other types are skipped.
+  # step 3. Audio is transcribed here (generic → becomes text); an image or a
+  # document is staged and passed to the backend by reference. Types the agent
+  # can't use (video, sticker, anything new) are not staged, but a caption on
+  # one still carries real intent, so it's forwarded as text with a bracketed
+  # note rather than dropped on the floor.
   local media_type media_mime media_rel="" had_media=0
   media_type="$(media_type_of "$envelope")"
   media_mime="$(media_mime_of "$envelope")"
@@ -164,10 +167,39 @@ handle_envelope() {
     had_media=1
     local workdir
     workdir="$(conversation_workdir "$slug")"
-    if ! media_rel="$(media_stage "$PROCESSED_DIR/$media_file" "$workdir")"; then
-      log_warn "[$stem] media file gone before staging; nothing to process"
-      return 0
+
+    # Oversize document guard, checked on the source in $PROCESSED_DIR *before*
+    # any copy, so a 2 GB WhatsApp document is never blindly staged. Documents
+    # only — images and audio ride WhatsApp's own ~16 MB ceiling. Oversize with
+    # a caption degrades to a plain text turn; a bare one returns after the
+    # notice (clearing media_type skips staging and the type case below).
+    if [[ "$media_type" == "document" ]]; then
+      local doc_mb
+      doc_mb="$(media_size_mb "$PROCESSED_DIR/$media_file" 2>/dev/null)" || doc_mb=0
+      if ((doc_mb > ${WABOX_DOC_MAX_MB:-100})); then
+        log_info "[$stem] document ${doc_mb}MB over WABOX_DOC_MAX_MB=${WABOX_DOC_MAX_MB:-100}; not staging"
+        # Distinct stem so a following caption reply (same $stem) can't clobber
+        # the notice — both jobs must reach the user, notice first.
+        write_outbox "$to" \
+          "Arquivo muito grande (${doc_mb} MB) — consigo ler até ${WABOX_DOC_MAX_MB:-100} MB." \
+          "$id" "${stem}-toobig" >/dev/null
+        [[ -n "$text" ]] || return 0
+        media_type="" media_mime=""
+      fi
     fi
+
+    # Stage only the types the agent can use (transcribe audio; hand image and
+    # document over by reference). Unsupported types are never copied. An
+    # oversize document cleared media_type above, so it skips this too.
+    case "$media_type" in
+      audio | image | document)
+        if ! media_rel="$(media_stage "$PROCESSED_DIR/$media_file" "$workdir")"; then
+          log_warn "[$stem] media file gone before staging; nothing to process"
+          return 0
+        fi
+        ;;
+    esac
+
     case "$media_type" in
       audio)
         if [[ -z "$WABOX_TRANSCRIBE_CMD" ]]; then
@@ -190,12 +222,28 @@ handle_envelope() {
         fi
         media_type="" media_mime="" media_rel=""
         ;;
-      image)
+      image | document)
         : # keep media_rel/media_type/media_mime; passed to the backend below
         ;;
+      "")
+        : # oversize document with a caption → plain text turn, nothing staged
+        ;;
       *)
-        log_info "[$stem] unsupported media type '$media_type'; skipping"
-        return 0
+        # video, sticker, or any future unknown type. A bare one is skipped as
+        # before; a captioned one is forwarded as text with a note so the agent
+        # knows a file it can't read was attached (and can say so).
+        if [[ -z "$text" ]]; then
+          log_info "[$stem] unsupported media '$media_type' with no caption; skipping"
+          return 0
+        fi
+        local unsup_note
+        case "$media_type" in
+          video)   unsup_note="[o usuário enviou um vídeo, que não consigo processar]" ;;
+          sticker) unsup_note="[o usuário enviou uma figurinha, que não consigo processar]" ;;
+          *)       unsup_note="[o usuário enviou um arquivo que não consigo processar]" ;;
+        esac
+        text="$unsup_note"$'\n\n'"$text"
+        media_type="" media_mime="" media_rel=""
         ;;
     esac
   fi

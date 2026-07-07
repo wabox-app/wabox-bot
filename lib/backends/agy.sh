@@ -103,19 +103,26 @@ agy_model_is_valid() {
   "$AGY_BIN" models 2>/dev/null | grep -Fxq -- "$1"
 }
 
-# Compose the prompt fed to agy on stdin: the concise-answer instruction,
-# then (for an image) a pointer to the staged file relative to the agent's
-# cwd, then the user's text. Audio is transcribed upstream and arrives as
-# plain text, so the only media type we special-case is "image".
+# Compose the prompt fed to agy on stdin: the concise-answer instruction, then
+# (for an image or a document) a pointer to the staged file relative to the
+# agent's cwd, then the user's text. Audio is transcribed upstream and arrives
+# as plain text, so the media types we special-case are "image" and "document".
 agy_compose_prompt() {
-  local text="$1" media_path="$2" media_type="$3"
+  local text="$1" media_path="$2" media_type="$3" media_mime="${4:-}"
   local prefix="$AGY_REPLY_PREFIX"
   [[ -n "$prefix" ]] && prefix="$prefix"$'\n\n'
-  if [[ "$media_type" == "image" && -n "$media_path" ]]; then
+  local line=""
+  if [[ -n "$media_path" ]]; then
+    case "$media_type" in
+      image)    line="The user sent an image at $media_path — view it and respond." ;;
+      document) line="The user sent a file at $media_path ($media_mime) — read it and respond." ;;
+    esac
+  fi
+  if [[ -n "$line" ]]; then
     if [[ -n "$text" ]]; then
-      printf '%sThe user sent an image at %s — view it and respond.\n\n%s' "$prefix" "$media_path" "$text"
+      printf '%s%s\n\n%s' "$prefix" "$line" "$text"
     else
-      printf '%sThe user sent an image at %s — view it and respond.' "$prefix" "$media_path"
+      printf '%s%s' "$prefix" "$line"
     fi
   else
     printf '%s%s' "$prefix" "$text"
@@ -135,7 +142,7 @@ agy_conversation_id_from_log() {
 # user-visible error message).
 backend_reply() {
   local slug="$1" conv_key="$2" stem="$3"
-  local media_path="${4:-}" media_type="${5:-}"
+  local media_path="${4:-}" media_type="${5:-}" media_mime="${6:-}"
   local text
   text="$(cat)"
 
@@ -177,7 +184,7 @@ backend_reply() {
   fi
 
   local prompt
-  prompt="$(agy_compose_prompt "$text" "$media_path" "$media_type")"
+  prompt="$(agy_compose_prompt "$text" "$media_path" "$media_type" "$media_mime")"
   # agy can spend minutes acting; wrap with a kill margin past --print-timeout.
   local out rc=0
   out="$(printf '%s' "$prompt" |

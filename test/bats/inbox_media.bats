@@ -78,7 +78,7 @@ SH
   [ "$(jq -r '.text' "$WABOX_OUTBOX/$stem.json")" = "echo: /clear" ]
 }
 
-@test "unsupported media type (video) is a silent no-op" {
+@test "bare unsupported media (video, no caption) is a silent no-op" {
   stem="20260101-000005_x_FFFF"
   mk_envelope "$stem" \
     "$(jq -nc --arg j "$JID" --arg f "$stem.mp4" \
@@ -86,6 +86,86 @@ SH
     "$stem.mp4"
   handle_envelope "$WABOX_INBOX/$stem.json"
   [ ! -f "$WABOX_OUTBOX/$stem.json" ]
+  # Never staged — the bytes are useless to the agent.
+  [ ! -e "$STATE_DIR/work/$SLUG/.wabox/media/$stem.mp4" ]
+}
+
+@test "document-only message is staged and reaches the backend" {
+  stem="20260101-000010_x_JJJJ"
+  mk_envelope "$stem" \
+    "$(jq -nc --arg j "$JID" --arg f "$stem.pdf" \
+       '{id:"M10",from:$j,text:"",media:{type:"document",file:$f,mimetype:"application/pdf"}}')" \
+    "$stem.pdf"
+  handle_envelope "$WABOX_INBOX/$stem.json"
+  [ -f "$WABOX_OUTBOX/$stem.json" ]
+  [ -f "$STATE_DIR/work/$SLUG/.wabox/media/$stem.pdf" ]
+}
+
+@test "document with a caption forwards the caption text" {
+  stem="20260101-000011_x_KKKK"
+  mk_envelope "$stem" \
+    "$(jq -nc --arg j "$JID" --arg f "$stem.pdf" \
+       '{id:"M11",from:$j,text:"resume isso",media:{type:"document",file:$f,mimetype:"application/pdf"}}')" \
+    "$stem.pdf"
+  handle_envelope "$WABOX_INBOX/$stem.json"
+  # echo backend ignores media and echoes the caption text through.
+  [ "$(jq -r '.text' "$WABOX_OUTBOX/$stem.json")" = "echo: resume isso" ]
+  [ -f "$STATE_DIR/work/$SLUG/.wabox/media/$stem.pdf" ]
+}
+
+@test "oversize document (no caption): notice sent, nothing staged, no turn" {
+  export WABOX_DOC_MAX_MB=0   # any non-empty file trips the guard
+  stem="20260101-000012_x_LLLL"
+  mk_envelope "$stem" \
+    "$(jq -nc --arg j "$JID" --arg f "$stem.pdf" \
+       '{id:"M12",from:$j,text:"",media:{type:"document",file:$f,mimetype:"application/pdf"}}')" \
+    "$stem.pdf"
+  handle_envelope "$WABOX_INBOX/$stem.json"
+  # The notice lands under a distinct stem; no agent turn ran (no $stem.json).
+  [ -f "$WABOX_OUTBOX/${stem}-toobig.json" ]
+  [[ "$(jq -r '.text' "$WABOX_OUTBOX/${stem}-toobig.json")" == *"muito grande"* ]]
+  [ ! -f "$WABOX_OUTBOX/$stem.json" ]
+  [ ! -e "$STATE_DIR/work/$SLUG/.wabox/media/$stem.pdf" ]
+}
+
+@test "oversize document with a caption still runs a text turn (notice + reply)" {
+  export WABOX_DOC_MAX_MB=0
+  stem="20260101-000013_x_MMMM"
+  mk_envelope "$stem" \
+    "$(jq -nc --arg j "$JID" --arg f "$stem.pdf" \
+       '{id:"M13",from:$j,text:"da uma olhada",media:{type:"document",file:$f,mimetype:"application/pdf"}}')" \
+    "$stem.pdf"
+  handle_envelope "$WABOX_INBOX/$stem.json"
+  # Both jobs exist — the notice (distinct stem) is not clobbered by the reply.
+  [[ "$(jq -r '.text' "$WABOX_OUTBOX/${stem}-toobig.json")" == *"muito grande"* ]]
+  [ "$(jq -r '.text' "$WABOX_OUTBOX/$stem.json")" = "echo: da uma olhada" ]
+  [ ! -e "$STATE_DIR/work/$SLUG/.wabox/media/$stem.pdf" ]
+}
+
+@test "video with a caption is forwarded as text with a bracketed note" {
+  stem="20260101-000014_x_NNNN"
+  mk_envelope "$stem" \
+    "$(jq -nc --arg j "$JID" --arg f "$stem.mp4" \
+       '{id:"M14",from:$j,text:"olha isso",media:{type:"video",file:$f,mimetype:"video/mp4"}}')" \
+    "$stem.mp4"
+  handle_envelope "$WABOX_INBOX/$stem.json"
+  text="$(jq -r '.text' "$WABOX_OUTBOX/$stem.json")"
+  [[ "$text" == *"vídeo"* ]]
+  [[ "$text" == *"olha isso"* ]]
+  # The video itself is never staged.
+  [ ! -e "$STATE_DIR/work/$SLUG/.wabox/media/$stem.mp4" ]
+}
+
+@test "a future unknown media type with a caption is forwarded with a generic note" {
+  stem="20260101-000015_x_OOOO"
+  mk_envelope "$stem" \
+    "$(jq -nc --arg j "$JID" --arg f "$stem.bin" \
+       '{id:"M15",from:$j,text:"veja",media:{type:"contact",file:$f,mimetype:"text/x-vcard"}}')" \
+    "$stem.bin"
+  handle_envelope "$WABOX_INBOX/$stem.json"
+  text="$(jq -r '.text' "$WABOX_OUTBOX/$stem.json")"
+  [[ "$text" == *"não consigo processar"* ]]
+  [[ "$text" == *"veja"* ]]
 }
 
 @test "transcription failure sends the error reply to the outbox" {

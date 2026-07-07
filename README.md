@@ -26,9 +26,20 @@ takes care of:
   `/cwd default` reverts. The Claude Code backend scopes its session to the
   working folder, so changing `/cwd` starts a fresh agent session in the new
   folder (Claude can't resume a session across directories).
-- **Image & audio messages** — an image is handed to the agent to read; a voice
-  note is transcribed to text first via a pluggable command (`WABOX_TRANSCRIBE_CMD`).
-  Captions are included. Media is staged under `<working-folder>/.wabox/media/`.
+- **Media messages** — an image or a document (PDF, spreadsheet, text file…) is
+  staged under `<working-folder>/.wabox/media/` and handed to the agent to read;
+  a voice note is transcribed to text first via a pluggable command
+  (`WABOX_TRANSCRIBE_CMD`). Documents over `WABOX_DOC_MAX_MB` (100) get a short
+  "too big" reply instead of silence. Video and stickers aren't processed, but a
+  caption on any unsupported type is still forwarded as text (with a note), never
+  dropped. Captions are always included.
+
+  | Type | Handling |
+  | --- | --- |
+  | image | staged, read by the agent |
+  | document | staged, read by the agent (≤ `WABOX_DOC_MAX_MB`; larger ⇒ notice) |
+  | audio | transcribed to text (`WABOX_TRANSCRIBE_CMD`) |
+  | video, sticker | not processed; a caption is forwarded as text with a note |
 - **Per-conversation overrides** persisted to disk and surviving restarts.
 
 ## Install
@@ -127,6 +138,7 @@ variables themselves are listed below.
 | `DEBUG` | `0` | Verbose logging. |
 | `WABOX_TRANSCRIBE_CMD` | (empty) | Speech-to-text command for inbound audio; the audio path is appended as the last argument, transcript read from stdout. Empty ⇒ audio is ignored. |
 | `WABOX_TRANSCRIBE_TIMEOUT` | `120` | Max seconds for the transcription command. |
+| `WABOX_DOC_MAX_MB` | `100` | Inbound documents larger than this aren't staged; the user gets a "too big" notice (any caption still goes through). |
 | `WABOX_ACK_REACT` | (empty) | Emoji reacted to a message when its agent turn *starts* (a "working on it" signal). Empty ⇒ off. |
 | `WABOX_SEND_DIR` | `send` | Folder (under each conversation's `.wabox/` plumbing dir) an agent drops files into to have them attached to its reply. |
 | `WABOX_SEND_KEEP_DAYS` | `7` | How long archived (`.sent/`) copies of sent files are kept before `gc` prunes them. |

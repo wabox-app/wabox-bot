@@ -87,6 +87,10 @@ CC_ADVERTISE_SEND_DIR="${CC_ADVERTISE_SEND_DIR:-1}"      # 0 = don't tell the ag
 # WABOX_TRANSCRIBE_CMD="${WABOX_TRANSCRIBE_CMD:-$HOME/.local/share/wabox-bot/plugins/faster-whisper/transcribe.sh}"
 WABOX_TRANSCRIBE_TIMEOUT="${WABOX_TRANSCRIBE_TIMEOUT:-120}"
 WABOX_TRANSCRIBE_LANG="${WABOX_TRANSCRIBE_LANG:-}"       # e.g. pt; empty = auto-detect
+# Inbound documents (PDFs, spreadsheets, text files) are staged like images and
+# read by the agent. A document larger than this many MB is not staged — the
+# user gets a short "too big" notice (any caption still goes through as text).
+WABOX_DOC_MAX_MB="${WABOX_DOC_MAX_MB:-100}"
 
 # ── Transcription plugins (set only the ones for your chosen plugin) ──────────
 # faster-whisper:

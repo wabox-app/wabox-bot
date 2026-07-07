@@ -44,9 +44,18 @@ teardown() {
   [[ "$output" == *"what is this?"* ]]
 }
 
-@test "bob_compose_prompt ignores a non-image media type" {
+@test "bob_compose_prompt ignores a non-image/document media type" {
   run bob_compose_prompt "transcript text" ".wabox/media/a.ogg" "audio"
   [ "$output" = "transcript text" ]
+}
+
+@test "bob_compose_prompt prepends an @-reference for documents with the MIME" {
+  run bob_compose_prompt "resume isso" ".wabox/media/c.pdf" "document" "application/pdf"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"@.wabox/media/c.pdf"* ]]
+  [[ "$output" == *"application/pdf"* ]]
+  [[ "$output" == *"read it and respond"* ]]
+  [[ "$output" == *"resume isso"* ]]
 }
 
 @test "backend_reply extracts .response from bob's json envelope" {

@@ -51,11 +51,14 @@ backend_reply() {
 
 `backend_reply` may receive three optional trailing arguments —
 `backend_reply <slug> <conv_key> <stem> [media_path] [media_type] [media_mime]`.
-When the inbound message carries an image, `media_path` is the file's location
-**relative to the working folder** (the backend's cwd), `media_type` is
-`image`, and `media_mime` is its MIME type. Audio is transcribed upstream and
-arrives as plain text, so backends only ever see `image` here. Backends that
-don't handle media simply ignore these arguments.
+When the inbound message carries stageable media, `media_path` is the file's
+location **relative to the working folder** (the backend's cwd), `media_type` is
+`image` or `document`, and `media_mime` is its MIME type. Audio is transcribed
+upstream and arrives as plain text; video, stickers, and oversize documents
+never reach the backend as media (a caption on them arrives as plain text with a
+bracketed note). So backends see `image | document` here, and should read the
+file at `media_path` — the MIME helps for the extension-less names common on
+WhatsApp forwards. Backends that don't handle media simply ignore these arguments.
 
 ### Optional
 

@@ -27,6 +27,17 @@ media_stage() {
   printf '%s/%s' "${dest_dir#"$workdir"/}" "$name"
 }
 
+# Integer size of a file in MB, rounded up (a 1-byte file is 1 MB), for the
+# inbound-document oversize guard. stat -c %s is Linux — the daemon is
+# Linux-only (README requirements), so no BSD fallback. Missing file ⇒ non-zero.
+# 1 MB = 1048576 bytes, matching human_bytes' 1024 steps.
+media_size_mb() {
+  local path="$1" bytes
+  [[ -f "$path" ]] || return 1
+  bytes="$(stat -c %s -- "$path" 2>/dev/null)" || return 1
+  printf '%d' $(( (bytes + 1048576 - 1) / 1048576 ))
+}
+
 # Transcribe an audio file via $WABOX_TRANSCRIBE_CMD. The command is
 # word-split (like CLAUDE_ARGS) and the audio path is appended as the final
 # argument; the transcript is read from stdout. Returns the command's exit
