@@ -34,7 +34,9 @@ fi
 
 PREV="$(cat VERSION)"
 [[ "$NEW" != "$PREV" ]] || die "VERSION is already $NEW"
-git rev-parse -q --verify "refs/tags/v$NEW" >/dev/null && die "tag v$NEW already exists" || true
+if git rev-parse -q --verify "refs/tags/v$NEW" >/dev/null; then
+  die "tag v$NEW already exists"
+fi
 ! grep -q "^## \[$NEW\]" CHANGELOG.md || die "CHANGELOG already has a [$NEW] section"
 grep -q '^## \[Unreleased\]' CHANGELOG.md || die "no [Unreleased] section in CHANGELOG.md"
 grep -q '^\[Unreleased\]:' CHANGELOG.md || die "no [Unreleased] compare-link in the CHANGELOG footer"
