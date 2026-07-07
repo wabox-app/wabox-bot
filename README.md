@@ -127,6 +127,10 @@ variables themselves are listed below.
 | `DEBUG` | `0` | Verbose logging. |
 | `WABOX_TRANSCRIBE_CMD` | (empty) | Speech-to-text command for inbound audio; the audio path is appended as the last argument, transcript read from stdout. Empty ⇒ audio is ignored. |
 | `WABOX_TRANSCRIBE_TIMEOUT` | `120` | Max seconds for the transcription command. |
+| `WABOX_ACK_REACT` | (empty) | Emoji reacted to a message when its agent turn *starts* (a "working on it" signal). Empty ⇒ off. |
+| `WABOX_SEND_DIR` | `wabox-send` | Folder (under each conversation's workdir) an agent drops files into to have them attached to its reply. |
+| `WABOX_SEND_KEEP_DAYS` | `7` | How long archived (`.sent/`) copies of sent files are kept before pruning. |
+| `WABOX_QUOTE_REPLY` | `auto` | Quote-reply policy: `auto` (groups, or when a backlog is queued), `always`, or `never`. |
 
 Ready-made transcribers for `WABOX_TRANSCRIBE_CMD` (faster-whisper, whisper.cpp,
 OpenAI Whisper, Vosk, and any OpenAI-compatible API such as Groq) live in
@@ -143,6 +147,28 @@ Backend-specific env vars (for example `CLAUDE_BIN`, `CLAUDE_ARGS`,
 | `echo` | built-in | Echoes the user's text back. Useful for smoke-testing the loop. |
 
 Adding your own backend is a single bash file. See `docs/backends.md`.
+
+## Sending files back
+
+An agent can deliver files over WhatsApp — a generated PDF, a chart, an edited
+image — by writing them into its conversation's send folder
+(`<workdir>/wabox-send/`, name via `WABOX_SEND_DIR`). Whatever files are in that
+folder when the turn ends are attached to the reply (sorted by name; the reply
+text becomes the first file's caption; core sends multiple files as separate
+messages). An empty reply with files present becomes a files-only delivery.
+
+The `claude-code` backend tells the agent about the folder automatically (turn
+off with `CC_ADVERTISE_SEND_DIR=0`). The folder is cleared at the *start* of the
+next turn — leftovers are archived to `wabox-send/.sent/<id>/`, not deleted, so a
+send that core is still reading isn't yanked out from under it; archives older
+than `WABOX_SEND_KEEP_DAYS` are pruned. Failed or timed-out turns attach nothing
+(their partial output waits in the folder and is archived next turn).
+
+The loop — never the agent — chooses the recipient and builds the file list, so a
+prompt-injected "send this to …" has no channel to act through. A compromised
+agent can still copy files *it can already read* into the folder; that's the
+existing agent-permission boundary, so run the agent with a working directory and
+permissions you trust.
 
 ## External tooling
 

@@ -23,6 +23,19 @@ GROUP_PER_PARTICIPANT="${GROUP_PER_PARTICIPANT:-0}"      # 1 = thread per person
 SHUTDOWN_DRAIN_TIMEOUT="${SHUTDOWN_DRAIN_TIMEOUT:-180}"  # seconds to drain on stop
 DEBUG="${DEBUG:-0}"                                      # 1 = verbose logging
 
+# ── Rich replies ─────────────────────────────────────────────────────────────
+# Ack reaction: emoji reacted to a message when its agent turn *starts* (a
+# "working on it" signal). Empty = off (default). Try 👀 or 👍.
+WABOX_ACK_REACT="${WABOX_ACK_REACT:-}"
+# Outgoing files: a file the agent writes into <workdir>/$WABOX_SEND_DIR/ is
+# attached to its reply. Archived (not deleted) at the next turn's start; the
+# archive is pruned after WABOX_SEND_KEEP_DAYS.
+WABOX_SEND_DIR="${WABOX_SEND_DIR:-wabox-send}"
+WABOX_SEND_KEEP_DAYS="${WABOX_SEND_KEEP_DAYS:-7}"
+# Quote-reply policy: auto|always|never. auto quotes in groups or when a newer
+# message for the same chat is still queued (so replies stay threaded).
+WABOX_QUOTE_REPLY="${WABOX_QUOTE_REPLY:-auto}"
+
 # ── Self-update ───────────────────────────────────────────────────────────────
 # On startup the daemon checks (backgrounded, best-effort) for a newer published
 # release and logs a notice; `wabox-bot --update` applies it. See README.
@@ -39,6 +52,7 @@ CLAUDE_BIN="${CLAUDE_BIN:-claude}"
 CLAUDE_ARGS="${CLAUDE_ARGS:---permission-mode default}"
 CLAUDE_TIMEOUT="${CLAUDE_TIMEOUT:-180}"                  # seconds per turn
 CC_PERMISSION_TIMEOUT="${CC_PERMISSION_TIMEOUT:-600}"    # secs a parked permission stays answerable
+CC_ADVERTISE_SEND_DIR="${CC_ADVERTISE_SEND_DIR:-1}"      # 0 = don't tell the agent about the send folder
 # SYSTEM_PROMPT_FILE="${SYSTEM_PROMPT_FILE:-}"           # global system prompt file
 
 # ── Transcription (core) ──────────────────────────────────────────────────────

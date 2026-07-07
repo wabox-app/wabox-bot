@@ -71,6 +71,26 @@ WABOX_TRANSCRIBE_TIMEOUT="${WABOX_TRANSCRIBE_TIMEOUT:-120}"
 # the longest backend reply timeout.
 SHUTDOWN_DRAIN_TIMEOUT="${SHUTDOWN_DRAIN_TIMEOUT:-180}"
 
+# ---- Rich replies (see docs/superpowers/specs/2026-07-06-rich-replies) ------
+# Ack reaction on agent-turn start. An emoji reacted to the inbound message the
+# moment we hand off to the backend (so it means "an agent turn is running", not
+# just "received"). Empty ⇒ disabled, the default, keeping outbox traffic
+# byte-identical to prior releases.
+WABOX_ACK_REACT="${WABOX_ACK_REACT:-}"
+# Outgoing files: the folder (relative to each conversation's workdir) an agent
+# drops files into for them to be attached to its reply, and how long archived
+# `.sent/` copies are kept before opportunistic pruning.
+WABOX_SEND_DIR="${WABOX_SEND_DIR:-wabox-send}"
+WABOX_SEND_KEEP_DAYS="${WABOX_SEND_KEEP_DAYS:-7}"
+# Quote-reply policy: auto|always|never. `auto` quotes in groups or when a newer
+# envelope for the same conversation is still queued (so a reply can't land
+# unthreaded after a later question). Junk falls back to auto.
+WABOX_QUOTE_REPLY="${WABOX_QUOTE_REPLY:-auto}"
+case "$WABOX_QUOTE_REPLY" in
+  auto | always | never) ;;
+  *) WABOX_QUOTE_REPLY="auto" ;;
+esac
+
 mkdir -p "$STATE_DIR" "$SESSIONS_DIR" "$LOCKS_DIR" "$PROCESSED_DIR" \
   "$(dirname "$LOG_FILE")" "$WABOX_OUTBOX"
 

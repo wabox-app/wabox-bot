@@ -31,6 +31,39 @@ persist_conversation_meta() {
   fi
 }
 
+# 0 if another envelope for the same conversation is currently queued in the
+# inbox — a newer message that means our reply may otherwise land unthreaded
+# after a later question. The current envelope was already moved to
+# PROCESSED_DIR (Step 3), so a match here is a genuinely different, still-queued
+# job. The inbox is small by design (jobs are picked up immediately), so this is
+# a handful of jq reads at worst. A file another worker moves to processed/
+# mid-probe just reads empty and is skipped (no backlog from that file).
+inbox_has_backlog_for() {
+  local conv_key="$1" f env cand_key
+  for f in "$WABOX_INBOX"/*.json; do
+    [[ -e "$f" ]] || continue          # no-match glob stays literal without nullglob
+    env="$(cat -- "$f" 2>/dev/null)" || continue
+    [[ -n "$env" ]] || continue
+    jq -e . >/dev/null 2>&1 <<<"$env" || continue
+    cand_key="$(conversation_key "$env")"
+    [[ "$cand_key" == "$conv_key" ]] && return 0
+  done
+  return 1
+}
+
+# Decide whether this reply should quote the message it answers, per
+# WABOX_QUOTE_REPLY: always ⇒ yes; never ⇒ no; auto ⇒ yes in a group (`*@g.us`,
+# conventional there) or when a backlog is queued for this conversation.
+should_quote_reply() {
+  local to="$1" conv_key="$2"
+  case "$WABOX_QUOTE_REPLY" in
+    always) return 0 ;;
+    never) return 1 ;;
+  esac
+  [[ "$to" == *@g.us ]] && return 0
+  inbox_has_backlog_for "$conv_key"
+}
+
 handle_envelope() {
   local in_path="$1"
   local in_name
@@ -72,11 +105,13 @@ handle_envelope() {
   log_debug "[$stem] moved to $PROCESSED_DIR (read receipt fired)"
 
   # ---- Step 4: extract the bits we need ---------------------------------
-  # (`participant` is parsed inside conversation_key() rather than here so
-  # it can pick its own routing strategy without us duplicating the jq.)
-  local id from text from_me conv_key slug
+  # `conversation_key()` re-parses `participant` for its own routing strategy;
+  # we also extract it here because the reaction/quote jobs need it verbatim to
+  # target the right group member's message (`react`/`replyTo` carry it).
+  local id from participant text from_me conv_key slug
   id="$(jq -r '.id     // empty' <<<"$envelope")"
   from="$(jq -r '.from // empty' <<<"$envelope")"
+  participant="$(jq -r '.participant // empty' <<<"$envelope")"
   text="$(jq -r '.text // empty' <<<"$envelope")"
   from_me="$(jq -r '.fromMe // false' <<<"$envelope")"
 
@@ -183,6 +218,25 @@ handle_envelope() {
     return 0
   fi
 
+  # ---- Step 5b: ack reaction (turn-in-progress signal) ------------------
+  # Fired here — after every slash-command / skip / empty / unsupported-media
+  # return above, immediately before the backend flock — so the reaction means
+  # specifically "an agent turn is now running", not merely "message received".
+  # It's a react-only job carrying the inbound id (+ participant in groups, so
+  # it targets the right member's message). Default WABOX_ACK_REACT="" disables
+  # it, keeping outbox traffic byte-identical to prior releases.
+  if [[ -n "$WABOX_ACK_REACT" && -n "$id" ]]; then
+    local ack_extras
+    ack_extras="$(jq -n \
+      --arg emoji "$WABOX_ACK_REACT" \
+      --arg mid "$id" \
+      --arg part "$participant" \
+      '{react: ({emoji: $emoji, messageId: $mid}
+                + (if $part == "" then {} else {participant: $part} end))}')"
+    write_outbox "$to" "" "" "${stem}-ack" "$ack_extras" >/dev/null
+    log_debug "[$stem] ack reaction $WABOX_ACK_REACT queued"
+  fi
+
   # ---- Step 6: serialize per-conversation, hand off to backend ---------
   # The flock ensures messages from the *same* sender are processed in order
   # (so the backend's per-conversation state doesn't race), while different
@@ -192,9 +246,28 @@ handle_envelope() {
     exec 8>"$LOCKS_DIR/$slug.lock"
     flock -x 8
 
+    # Ready the outgoing-file folder *before* the agent runs so it sees a clean
+    # workspace: leftovers from a prior turn are archived (not deleted — core
+    # may still be reading them), and stale archives pruned. Same workdir the
+    # backend cd's into (both mkdir -p it; idempotent).
+    local workdir
+    workdir="$(conversation_workdir "$slug")"
+    senddir_prepare "$workdir" "$stem"
+    senddir_prune "$workdir"
+
     local reply rc=0
     reply="$(printf '%s' "$text" |
       backend_reply "$slug" "$conv_key" "$stem" "$media_rel" "$media_type" "$media_mime")" || rc=$?
+
+    # Collect agent-produced files only on the success path — a failed or
+    # timed-out turn's partial outputs stay in the folder and get archived at
+    # the next turn's start rather than being delivered.
+    local -a extra_files=()
+    if ((rc == 0)); then
+      local collected
+      collected="$(senddir_collect "$workdir")"
+      [[ -n "$collected" ]] && mapfile -t extra_files <<<"$collected"
+    fi
 
     if ((rc == 124)); then
       log_error "[$stem] backend timed out"
@@ -202,13 +275,38 @@ handle_envelope() {
     elif ((rc != 0)); then
       log_error "[$stem] backend exited rc=$rc"
       reply="(Sorry — I hit an error processing that message.)"
-    elif [[ -z "$reply" ]]; then
+    elif [[ -z "$reply" && ${#extra_files[@]} -eq 0 ]]; then
       log_warn "[$stem] backend returned empty reply"
       reply="(no response)"
     fi
+    # Empty reply *with* files ⇒ a files-only delivery (write_outbox omits the
+    # empty text); today that would have been "(no response)".
 
-    local out_path
-    out_path="$(write_outbox "$to" "$reply" "" "$stem")"
+    # Build the job extras: a quote (replyTo) when policy says so, and the
+    # attached files. The loop — never the model — computes both, so an agent
+    # can't inject a recipient or an arbitrary file list into the job.
+    local extras_json='{}'
+    if should_quote_reply "$to" "$conv_key"; then
+      extras_json="$(jq -cn \
+        --argjson base "$extras_json" \
+        --arg id "$id" \
+        --arg part "$participant" \
+        '$base + {replyTo: ({id: $id}
+                  + (if $part == "" then {} else {participant: $part} end))}')"
+    fi
+    if ((${#extra_files[@]})); then
+      local files_json
+      files_json="$(printf '%s\n' "${extra_files[@]}" | jq -R . | jq -cs .)"
+      extras_json="$(jq -cn \
+        --argjson base "$extras_json" \
+        --argjson files "$files_json" \
+        '$base + {files: $files}')"
+      log_info "[$stem] attaching ${#extra_files[@]} file(s) from send folder"
+    fi
+
+    local out_path extras_arg=""
+    [[ "$extras_json" != "{}" ]] && extras_arg="$extras_json"
+    out_path="$(write_outbox "$to" "$reply" "" "$stem" "$extras_arg")"
     log_info "[$stem] wrote reply → $out_path"
   )
 

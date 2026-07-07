@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-06
+
+### Added
+
+- Rich replies, all loop-level and off-by-default-safe (no backend-contract
+  change; the reply contract stays "text on stdout"). Three features:
+  - **Ack reactions.** Set `WABOX_ACK_REACT` (e.g. `👀`) and the bot reacts to a
+    message the moment its agent turn starts — a "working on it" signal distinct
+    from the blue-tick read receipt. React-only job carrying the inbound id (+
+    `participant` in groups). Empty (the default) keeps outbox traffic
+    byte-identical to prior releases; slash commands, skipped, and empty messages
+    never trigger it.
+  - **Outgoing files.** A file the agent writes into its conversation's send
+    folder (`<workdir>/wabox-send/`, name via `WABOX_SEND_DIR`) is attached to
+    the reply — sorted by name, reply text as the first file's caption, empty
+    reply + files ⇒ a files-only delivery. The folder is cleared at the *next*
+    turn's start (leftovers archived to `.sent/`, pruned after
+    `WABOX_SEND_KEEP_DAYS`, default 7) so an in-flight send isn't raced; failed
+    turns attach nothing. The `claude-code` backend advertises the folder to the
+    agent (`CC_ADVERTISE_SEND_DIR`, default on). The loop — never the model —
+    owns the recipient and the file list.
+  - **Quote-replies.** `WABOX_QUOTE_REPLY=auto|always|never` (default `auto`).
+    `auto` quotes in groups (with `participant`) or when a newer message for the
+    same conversation is still queued in the inbox, so replies stay threaded
+    under backlog.
+- `lib/senddir.sh` — the send-folder lifecycle helpers (`senddir_prepare`,
+  `senddir_collect`, `senddir_prune`), kept out of `lib/inbox.sh` for testability.
+
+### Changed
+
+- `write_outbox` takes an optional 5th argument, `extras` — a JSON object merged
+  into the job (`react`, `files`, richer `replyTo` with `participant`). Existing
+  four-arg callers are untouched and their output is byte-identical. Invalid or
+  non-object extras are logged and ignored rather than blocking delivery; an
+  empty `text` is now omitted from the job (enabling react-only / files-only
+  jobs).
+
 ## [0.5.0] - 2026-07-06
 
 ### Added
@@ -175,7 +212,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `install.sh` one-liner: clones to `~/.local/share/wabox-bot`, symlinks
   `bin/wabox-bot` into `~/.local/bin/`.
 
-[Unreleased]: https://github.com/wabox-app/wabox-bot/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/wabox-app/wabox-bot/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/wabox-app/wabox-bot/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/wabox-app/wabox-bot/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/wabox-app/wabox-bot/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/wabox-app/wabox-bot/compare/v0.2.0...v0.3.0

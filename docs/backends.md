@@ -163,6 +163,35 @@ loads, so values there reach the backend and any subprocess it spawns.
 | `backend_state_dir <slug>` | Returns (and `mkdir -p`'s) `$SESSIONS_DIR/<slug>/<backend>`. Always use this rather than computing the path yourself — keeps state per-backend so `/clear` doesn't wipe other backends' history. |
 | `conversation_workdir <slug>` | Returns (and `mkdir -p`'s) the conversation's working folder — the auto default `$STATE_DIR/work/<slug>`, or the path the user set with `/cwd`. Backends that run an agent in a directory should `cd` into this before invoking it, so file operations stay isolated per conversation. Do the `cd` inside a subshell so it doesn't leak across turns; `backend_reply` already runs inside one (it's called from a command substitution in `lib/inbox.sh`). |
 
+## Rich replies (loop-level, no contract change)
+
+Reactions, outgoing files, and quote-replies are all handled by the loop, not
+the backend — the reply contract stays "text on stdout". You get them for free:
+
+- **Ack reaction** — when `WABOX_ACK_REACT` is set, the loop reacts to the
+  inbound message the moment it hands off to your `backend_reply`. Nothing to do.
+- **Quote-replies** — the loop decides whether to quote (see `WABOX_QUOTE_REPLY`)
+  and computes `replyTo` itself. Nothing to do.
+- **Outgoing files** — any file that exists in
+  `<workdir>/$WABOX_SEND_DIR/` (default `wabox-send/`, a subfolder of
+  `conversation_workdir`) when your turn returns is attached to the reply,
+  sorted by name, with the reply text as the first file's caption. The folder is
+  cleared (leftovers archived to `.sent/`) at the *start* of each turn, so only
+  files this turn produced are sent. Failed/timed-out turns attach nothing.
+
+  Your backend doesn't need to touch this — but the *agent* it drives has to know
+  the folder exists. The `claude-code` backend appends a one-sentence
+  system-prompt hint when `CC_ADVERTISE_SEND_DIR=1` (default). For other
+  backends, do the equivalent through whatever prompt-shaping knob you have:
+  `agy` prepends `AGY_REPLY_PREFIX`; `bob` users can add the instruction via
+  `BOB_ARGS`. The mechanism is the same — tell the agent to write files it wants
+  delivered into `<workdir>/wabox-send/`.
+
+  Note: the loop attaches whatever readable files land in the folder — a
+  compromised or careless agent could copy a file it shouldn't. That's the
+  existing agent-permission boundary (the agent can already read those files),
+  not a new one; the loop never lets the agent choose the *recipient*.
+
 ## A minimal backend
 
 ```bash

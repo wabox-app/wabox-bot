@@ -30,6 +30,10 @@ SYSTEM_PROMPT_FILE="${SYSTEM_PROMPT_FILE:-}"
 # How long a parked permission request stays answerable. After this many
 # seconds the next message is treated as a fresh prompt, not a yes/no answer.
 CC_PERMISSION_TIMEOUT="${CC_PERMISSION_TIMEOUT:-600}"
+# Tell the agent, via one appended system-prompt sentence, that files it writes
+# into the conversation's send folder are delivered over WhatsApp. Set 0 to keep
+# the agent unaware of the outgoing-file convention.
+CC_ADVERTISE_SEND_DIR="${CC_ADVERTISE_SEND_DIR:-1}"
 
 backend_name() {
   printf 'claude-code\n'
@@ -209,6 +213,13 @@ cc_run_turn() {
   cmd+=(-p --output-format json)
   if [[ -n "$SYSTEM_PROMPT_FILE" && -r "$SYSTEM_PROMPT_FILE" ]]; then
     cmd+=(--append-system-prompt "$(cat -- "$SYSTEM_PROMPT_FILE")")
+  fi
+  # Advertise the outgoing-file folder (absolute, so the agent can write to it
+  # regardless of any cd it does mid-turn). The loop attaches whatever lands
+  # there to this turn's reply — see lib/senddir.sh / lib/inbox.sh.
+  if [[ "$CC_ADVERTISE_SEND_DIR" == "1" ]]; then
+    cmd+=(--append-system-prompt \
+      "To send the user a file over WhatsApp, write it to $workdir/${WABOX_SEND_DIR:-wabox-send}/ — any file you leave in that folder is attached to your reply and delivered.")
   fi
   local model_override
   model_override="$(cc_model_for "$slug" || true)"
