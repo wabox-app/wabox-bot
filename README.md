@@ -130,14 +130,14 @@ Adding your own backend is a single bash file. See `docs/backends.md`.
 
 ## External tooling
 
-Three read-only / client verbs form a stable, versioned contract so tools (such
-as a TUI) can observe and act on the daemon without parsing `$STATE_DIR`
-internals:
+A small set of client verbs forms a stable, versioned contract so tools (such as
+a TUI) can observe and act on the daemon without parsing `$STATE_DIR` internals:
 
 ```bash
-wabox-bot state --json               # snapshot of the daemon + every conversation
+wabox-bot state --json                   # snapshot of the daemon + every conversation
 wabox-bot transcript <slug> [--limit N]  # one conversation's message history
-wabox-bot answer <slug> <yes|no>     # answer a conversation's parked permission
+wabox-bot cmd <slug> "<slash command>"   # run /cwd, /model, /mode, /system, /clear …
+wabox-bot answer <slug> <yes|no>         # answer a conversation's parked permission
 ```
 
 - `state --json` prints one JSON object: a top-level `"version": 1` (the schema
@@ -156,6 +156,14 @@ wabox-bot answer <slug> <yes|no>     # answer a conversation's parked permission
   default 200). Needs `KEEP_PROCESSED=1` for inbound history; `keep_processed`
   reflects that. Like the other verbs it does the slug→conversation routing so
   consumers never scan wabox's directories themselves.
+- `cmd <slug> "<slash command>"` runs a conversation's slash command through the
+  exact same path a WhatsApp message would (same validation, same per-conversation
+  locking the commands take themselves), but **captures the reply to stdout
+  instead of sending it over WhatsApp** — so a tool can change a conversation's
+  working folder, model, mode, system prompt, or clear its session without
+  messaging the user. Exit `0` when handled (reply on stdout), `1` on usage /
+  unknown slug / non-command input. This is the write half of the contract;
+  `state --json` reads the same settings back.
 - `answer <slug> <yes|no>` answers a parked permission the same way replying
   `sim`/`não` over WhatsApp would, and the reply still lands in the chat. It
   takes the per-conversation lock (not the single-instance lock), so it

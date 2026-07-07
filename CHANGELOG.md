@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-06
+
+### Added
+
+- `wabox-bot cmd <slug> "<slash command>"` — run a conversation's slash command
+  (`/cwd`, `/model`, `/mode`, `/system`, `/clear`, and any backend command) from
+  the CLI, the write half of the `state`/`transcript`/`answer` contract (for
+  wabox-tui). Reuses `handle_slash_command` verbatim — same validation, same
+  per-conversation locking those commands already take — but captures the reply
+  and prints it on stdout instead of delivering it over WhatsApp, so tooling can
+  change a conversation's settings without messaging the user. Exit `0` when the
+  command was handled (reply on stdout, possibly an "Unknown command" notice),
+  `1` on usage / unknown slug / non-command input.
+
 ## [0.3.0] - 2026-07-06
 
 ### Added
@@ -144,7 +158,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `install.sh` one-liner: clones to `~/.local/share/wabox-bot`, symlinks
   `bin/wabox-bot` into `~/.local/bin/`.
 
-[Unreleased]: https://github.com/wabox-app/wabox-bot/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/wabox-app/wabox-bot/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/wabox-app/wabox-bot/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/wabox-app/wabox-bot/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/wabox-app/wabox-bot/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/wabox-app/wabox-bot/compare/v0.1.0...v0.1.1
