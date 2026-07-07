@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Self-update installs the detected tag, not branch HEAD.** `wabox-bot --update`
+  (and `/update now`) now `fetch` + `reset --hard` onto the latest published
+  `vX.Y.Z` tag — the same ref `--check-update` reports — instead of
+  `origin/<branch>`. Previously the two disagreed: detection keyed off tags while
+  application reset to branch HEAD, so an update could silently pull unreleased
+  (or CI-failing) commits that had landed on `main` after the last tag. With no
+  tag published yet it falls back to `WABOX_BOT_BRANCH`.
+
 ## [0.11.0] - 2026-07-07
 
 ### Added

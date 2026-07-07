@@ -194,7 +194,7 @@ Usage:
           # Applying only rewrites the files on disk; this already-running daemon
           # keeps executing the old code until it's restarted — say so plainly.
           local upd_out upd_arc=0
-          upd_out="$(update_apply)" || upd_arc=$?
+          upd_out="$(update_apply "$upd_latest")" || upd_arc=$?
           if ((upd_arc == 0)); then
             upd_msg="Updated to v$(wabox_bot_version). Restart the daemon for it to take effect (it's still running the old code until then)."
             log_info "[$stem] /update now → applied v$(wabox_bot_version)"

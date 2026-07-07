@@ -68,11 +68,15 @@ rm -rf ~/.local/share/wabox-bot ~/.local/bin/wabox-bot
 
 ```bash
 wabox-bot --check-update   # is a newer release published? (exit 0/10/1)
-wabox-bot --update         # upgrade in place (git reset --hard to origin/main)
+wabox-bot --update         # upgrade in place to the latest tagged release
 ```
 
-`--update` is the same `fetch` + `reset --hard` `install.sh` runs, so re-running
-the one-liner works too. It prompts for confirmation on a terminal
+Both key off the highest published `vX.Y.Z` **tag** (via `git ls-remote`, no
+GitHub API): `--check-update` compares it to the installed `VERSION`, and
+`--update` does a `fetch` + `reset --hard` onto that tag — so an update only ever
+lands on a deliberately-cut release, never a mid-flight `main` commit. (With no
+tag published yet, it falls back to `WABOX_BOT_BRANCH`.) It prompts for
+confirmation on a terminal
 (`WABOX_BOT_ASSUME_YES=1` to skip) and refuses to discard local changes in a dev
 checkout unless `WABOX_BOT_UPDATE_FORCE=1`. The running daemon also checks on
 startup and logs a notice (and shows it in `/status`) when a newer release

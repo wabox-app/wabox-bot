@@ -51,6 +51,76 @@ teardown() {
   [ "$status" -eq 1 ]
 }
 
+# ---- update_apply targets the tag, not branch HEAD -------------------------
+# These build real local git repos (offline) and let update_apply run for real
+# against a test clone by pointing _WABOX_BOT_UPDATE_ROOT at it.
+
+_git() { git -C "$1" -c user.email=t@t -c user.name=t "${@:2}"; }
+
+# Upstream with two tags (v0.1.0, v0.2.0) and an extra *untagged* commit on main
+# past the latest tag — so "branch HEAD" and "latest tag" are different commits.
+_mk_upstream() {
+  local up="$1"
+  git init -q -b main "$up"
+  printf '0.1.0\n' >"$up/VERSION"; _git "$up" add -A; _git "$up" commit -qm r1; _git "$up" tag v0.1.0
+  printf '0.2.0\n' >"$up/VERSION"; _git "$up" add -A; _git "$up" commit -qm r2; _git "$up" tag v0.2.0
+  printf 'x\n'     >"$up/UNRELEASED"; _git "$up" add -A; _git "$up" commit -qm past-tag
+}
+
+@test "update_apply installs the latest tag, not the untagged branch HEAD" {
+  up="$TMPDIR_TEST/up"; clone="$TMPDIR_TEST/clone"
+  _mk_upstream "$up"
+  git clone -q "$up" "$clone"
+  [ -f "$clone/UNRELEASED" ]                       # starts at branch HEAD
+
+  _WABOX_BOT_UPDATE_ROOT="$clone"
+  run update_apply "0.2.0"
+  [ "$status" -eq 0 ]
+  # Landed on the v0.2.0 tag commit: VERSION is 0.2.0 and the post-tag file is gone.
+  [ "$(cat "$clone/VERSION")" = "0.2.0" ]
+  [ ! -e "$clone/UNRELEASED" ]
+  [ "$(_git "$clone" rev-parse HEAD)" = "$(_git "$up" rev-parse v0.2.0^{commit})" ]
+}
+
+@test "update_apply with no version arg resolves the latest tag itself" {
+  up="$TMPDIR_TEST/up2"; clone="$TMPDIR_TEST/clone2"
+  _mk_upstream "$up"
+  git clone -q "$up" "$clone"
+  _WABOX_BOT_UPDATE_ROOT="$clone"
+  update_latest_published_version() { printf '0.2.0'; }   # stub the network read
+  run update_apply
+  [ "$status" -eq 0 ]
+  [ "$(cat "$clone/VERSION")" = "0.2.0" ]
+  [ ! -e "$clone/UNRELEASED" ]
+}
+
+@test "update_apply falls back to the branch when no tag is published" {
+  up="$TMPDIR_TEST/up3"; clone="$TMPDIR_TEST/clone3"
+  git init -q -b main "$up"
+  printf '0.0.0\n' >"$up/VERSION"; _git "$up" add -A; _git "$up" commit -qm c1
+  printf 'head\n'  >"$up/MARKER";  _git "$up" add -A; _git "$up" commit -qm c2
+  git clone -q "$up" "$clone"
+  _git "$clone" reset --hard -q HEAD~1              # move the clone behind main
+
+  _WABOX_BOT_UPDATE_ROOT="$clone"
+  update_latest_published_version() { return 1; }   # no tags upstream
+  run update_apply ""
+  [ "$status" -eq 0 ]
+  [ -f "$clone/MARKER" ]                            # advanced to branch HEAD
+}
+
+@test "update_apply refuses a dirty checkout without FORCE" {
+  up="$TMPDIR_TEST/up4"; clone="$TMPDIR_TEST/clone4"
+  _mk_upstream "$up"
+  git clone -q "$up" "$clone"
+  printf 'local edit\n' >>"$clone/VERSION"          # dirty the tree
+  _WABOX_BOT_UPDATE_ROOT="$clone"
+  run update_apply "0.2.0"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"local changes"* ]]
+  [ -f "$clone/UNRELEASED" ]                        # untouched — no reset happened
+}
+
 @test "/update reports up to date" {
   update_check() { return 0; }
   wabox_bot_version() { printf '0.4.0'; }

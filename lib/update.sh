@@ -2,9 +2,11 @@
 #
 # "Published" = the highest vX.Y.Z tag on the upstream repo, read with
 # `git ls-remote` — no curl/wget, no local fetch, no GitHub API. The daemon is
-# installed as a shallow git clone that tracks origin/<branch> (see install.sh),
-# so applying an update is the same `fetch` + `reset --hard` the installer runs;
-# there is nothing else to reconcile.
+# installed as a shallow git clone (see install.sh), and applying an update is a
+# `fetch` + `reset --hard` onto that tag — never a mid-flight branch HEAD, so an
+# update only ever lands on a deliberately-cut release (which, with releases cut
+# after CI is green, is the CI-vetted commit). Detection and application key off
+# the same tag. Falls back to WABOX_BOT_BRANCH only when no tag is published yet.
 #
 # Sourced by the entrypoint right after lib/version.sh — before config/log — so
 # the --update / --check-update flags work with no other setup. Two consequences:
@@ -62,14 +64,22 @@ update_check() {
   return 0
 }
 
-# Apply the update: fetch + hard-reset the install to origin/<branch>, exactly as
-# install.sh does. Guards: must be a git checkout, and refuses when the tree has
-# uncommitted changes (a dev checkout) unless WABOX_BOT_UPDATE_FORCE=1. Serialized
-# by a private flock so a CLI --update and a WhatsApp /update can't reset at once.
+# Apply the update: fetch the latest published *tag* and hard-reset the install
+# to it, so an update always lands on a deliberately-cut release rather than a
+# mid-flight branch HEAD. When no tag is published (a fresh upstream, or a fork
+# tracking a branch) it falls back to WABOX_BOT_BRANCH — the installer's
+# fetch + reset behaviour. The target version may be passed in ($1); callers on
+# the /update path have usually just resolved it via update_check, so passing it
+# avoids a second ls-remote. Omitted, it's resolved here.
+#
+# Guards: must be a git checkout, and refuses when the tree has uncommitted
+# changes (a dev checkout) unless WABOX_BOT_UPDATE_FORCE=1. Serialized by a
+# private flock so a CLI --update and a WhatsApp /update can't reset at once.
 # Human-readable messages go to stdout (captured into the /update reply); git's
 # own progress goes to stderr (the daemon log / the CLI terminal). Return 0 on
 # success, non-zero otherwise.
 update_apply() {
+  local latest="${1:-}"
   local root="$_WABOX_BOT_UPDATE_ROOT"
   local branch="${WABOX_BOT_BRANCH:-main}"
   local net_timeout="${WABOX_BOT_UPDATE_NET_TIMEOUT:-8}"
@@ -86,6 +96,15 @@ update_apply() {
     return 1
   fi
 
+  # Resolve the ref to install: the latest published tag, else the branch.
+  [[ -n "$latest" ]] || latest="$(update_latest_published_version || true)"
+  local fetch_ref
+  if [[ -n "$latest" ]]; then
+    fetch_ref="refs/tags/v$latest"
+  else
+    fetch_ref="$branch"
+  fi
+
   local rc=0
   (
     # fd 7 is free (single-instance holds 9, per-conversation holds 8). The lock
@@ -93,8 +112,10 @@ update_apply() {
     # is never mistaken for a tracked file.
     exec 7>"$root/.git/.wabox-update.lock"
     flock -x 7
-    timeout "$net_timeout" git -C "$root" fetch --depth=1 origin "$branch" >&2 \
-      && git -C "$root" reset --hard "origin/$branch" >&2
+    # Fetch just the target ref (tag or branch) and reset to what came back;
+    # FETCH_HEAD covers both without a local tag ref having to exist.
+    timeout "$net_timeout" git -C "$root" fetch --depth=1 origin "$fetch_ref" >&2 \
+      && git -C "$root" reset --hard FETCH_HEAD >&2
   ) || rc=$?
   if ((rc != 0)); then
     printf 'git update failed (rc=%d). See stderr / the log for details.\n' "$rc"
@@ -141,7 +162,7 @@ update_cli_apply() {
   fi
 
   local out apply_rc=0
-  out="$(update_apply)" || apply_rc=$?
+  out="$(update_apply "$latest")" || apply_rc=$?
   [[ -n "$out" ]] && printf '%s\n' "$out"
   if ((apply_rc == 0)); then
     printf 'wabox-bot: updated to %s. Restart the daemon for it to take effect.\n' \
