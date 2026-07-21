@@ -261,33 +261,71 @@ handle_envelope() {
     return 0
   fi
 
-  # ---- Step 5b: ack reaction (turn-in-progress signal) ------------------
-  # Fired here — after every slash-command / skip / empty / unsupported-media
-  # return above, immediately before the backend flock — so the reaction means
-  # specifically "an agent turn is now running", not merely "message received".
-  # It's a react-only job carrying the inbound id (+ participant in groups, so
-  # it targets the right member's message). Default WABOX_ACK_REACT="" disables
-  # it, keeping outbox traffic byte-identical to prior releases.
-  if [[ -n "$WABOX_ACK_REACT" && -n "$id" ]]; then
-    local ack_extras
-    ack_extras="$(jq -n \
-      --arg emoji "$WABOX_ACK_REACT" \
-      --arg mid "$id" \
-      --arg part "$participant" \
-      '{react: ({emoji: $emoji, messageId: $mid}
-                + (if $part == "" then {} else {participant: $part} end))}')"
-    write_outbox "$to" "" "" "${stem}-ack" "$ack_extras" >/dev/null
-    log_debug "[$stem] ack reaction $WABOX_ACK_REACT queued"
-  fi
+  # ---- Step 5b: enqueue this prepared turn-part ------------------------
+  # Everything above ran per-envelope (read receipt, media staging, audio
+  # transcription). From here the message is coalesced: append it to the
+  # conversation's batch so the drain below can merge a whole burst — an image
+  # plus its caption, several photos and a line of text — into ONE agent turn,
+  # instead of firing a confusing turn per fragment. See lib/batch.sh for why
+  # appends are lock-free and the drain is serialized.
+  log_info "[$stem] from=$from conv=$conv_key → batched"
+  batch_append "$slug" "$text" "$media_rel" "$media_type" "$media_mime" \
+    "$id" "$participant" "$to" "$stem"
 
-  # ---- Step 6: serialize per-conversation, hand off to backend ---------
-  # The flock ensures messages from the *same* sender are processed in order
-  # (so the backend's per-conversation state doesn't race), while different
-  # senders run in parallel via the per-conversation lockfile.
-  log_info "[$stem] from=$from conv=$conv_key → backend"
+  # ---- Step 6: drain the batch under the per-conversation flock ---------
+  # The flock serializes same-sender turns (so backend state doesn't race) and
+  # is what makes batching work: the worker that wins the lock waits out the
+  # quiet window and drains every part the others appended; they then find the
+  # queue empty and return. Different senders still run in parallel.
   (
     exec 8>"$LOCKS_DIR/$slug.lock"
     flock -x 8
+
+    # Wait for the burst to settle. Empty ⇒ another worker already drained our
+    # part, so there's nothing to do (batch_settle checks before it waits, so a
+    # loser doesn't burn the window).
+    batch_settle "$slug" || exit 0
+
+    local merged
+    merged="$(batch_collect "$slug")" || exit 0
+
+    # Unpack the merged turn. id/participant/to/stem describe the NEWEST message
+    # of the burst, so the reply quotes and reacts to it and the outbox stem is
+    # unique to this drain. $b_media is the full media manifest.
+    local b_text b_media b_id b_part b_to b_stem b_count
+    b_text="$(jq -r '.text' <<<"$merged")"
+    b_media="$(jq -c '.media' <<<"$merged")"
+    b_id="$(jq -r '.id' <<<"$merged")"
+    b_part="$(jq -r '.participant' <<<"$merged")"
+    b_to="$(jq -r '.to' <<<"$merged")"
+    b_stem="$(jq -r '.stem' <<<"$merged")"
+    b_count="$(jq -r '.count' <<<"$merged")"
+
+    # First media item as the legacy positional args (for backends that read
+    # them, e.g. bob/agy); the manifest $b_media carries every item for backends
+    # that compose all of them (claude-code shows the agent all N images).
+    local m1_path m1_type m1_mime
+    m1_path="$(jq -r '.media[0].path // ""' <<<"$merged")"
+    m1_type="$(jq -r '.media[0].type // ""' <<<"$merged")"
+    m1_mime="$(jq -r '.media[0].mime // ""' <<<"$merged")"
+
+    log_info "[$b_stem] draining $b_count message(s) for conv=$conv_key → backend"
+
+    # Ack reaction (turn-in-progress signal): fired once, here, as the merged
+    # turn starts — so it means "an agent turn is now running", reacting to the
+    # newest message of the burst. It's a react-only job carrying that id (+
+    # participant in groups). Default WABOX_ACK_REACT="" disables it.
+    if [[ -n "$WABOX_ACK_REACT" && -n "$b_id" ]]; then
+      local ack_extras
+      ack_extras="$(jq -n \
+        --arg emoji "$WABOX_ACK_REACT" \
+        --arg mid "$b_id" \
+        --arg part "$b_part" \
+        '{react: ({emoji: $emoji, messageId: $mid}
+                  + (if $part == "" then {} else {participant: $part} end))}')"
+      write_outbox "$b_to" "" "" "${b_stem}-ack" "$ack_extras" >/dev/null
+      log_debug "[$b_stem] ack reaction $WABOX_ACK_REACT queued"
+    fi
 
     # Ready the outgoing-file folder *before* the agent runs so it sees a clean
     # workspace: leftovers from a prior turn are archived (not deleted — core
@@ -295,12 +333,12 @@ handle_envelope() {
     # backend cd's into (both mkdir -p it; idempotent).
     local workdir
     workdir="$(conversation_workdir "$slug")"
-    senddir_prepare "$workdir" "$stem"
+    senddir_prepare "$workdir" "$b_stem"
     senddir_prune "$workdir"
 
     local reply rc=0
-    reply="$(printf '%s' "$text" |
-      backend_reply "$slug" "$conv_key" "$stem" "$media_rel" "$media_type" "$media_mime")" || rc=$?
+    reply="$(printf '%s' "$b_text" |
+      backend_reply "$slug" "$conv_key" "$b_stem" "$m1_path" "$m1_type" "$m1_mime" "$b_media")" || rc=$?
 
     # Collect agent-produced files only on the success path — a failed or
     # timed-out turn's partial outputs stay in the folder and get archived at
@@ -313,13 +351,13 @@ handle_envelope() {
     fi
 
     if ((rc == 124)); then
-      log_error "[$stem] backend timed out"
+      log_error "[$b_stem] backend timed out"
       reply="(Sorry — I took too long to think. Please try again.)"
     elif ((rc != 0)); then
-      log_error "[$stem] backend exited rc=$rc"
+      log_error "[$b_stem] backend exited rc=$rc"
       reply="(Sorry — I hit an error processing that message.)"
     elif [[ -z "$reply" && ${#extra_files[@]} -eq 0 ]]; then
-      log_warn "[$stem] backend returned empty reply"
+      log_warn "[$b_stem] backend returned empty reply"
       reply="(no response)"
     fi
     # Empty reply *with* files ⇒ a files-only delivery (write_outbox omits the
@@ -329,11 +367,11 @@ handle_envelope() {
     # attached files. The loop — never the model — computes both, so an agent
     # can't inject a recipient or an arbitrary file list into the job.
     local extras_json='{}'
-    if should_quote_reply "$to" "$conv_key"; then
+    if should_quote_reply "$b_to" "$conv_key"; then
       extras_json="$(jq -cn \
         --argjson base "$extras_json" \
-        --arg id "$id" \
-        --arg part "$participant" \
+        --arg id "$b_id" \
+        --arg part "$b_part" \
         '$base + {replyTo: ({id: $id}
                   + (if $part == "" then {} else {participant: $part} end))}')"
     fi
@@ -344,13 +382,13 @@ handle_envelope() {
         --argjson base "$extras_json" \
         --argjson files "$files_json" \
         '$base + {files: $files}')"
-      log_info "[$stem] attaching ${#extra_files[@]} file(s) from send folder"
+      log_info "[$b_stem] attaching ${#extra_files[@]} file(s) from send folder"
     fi
 
     local out_path extras_arg=""
     [[ "$extras_json" != "{}" ]] && extras_arg="$extras_json"
-    out_path="$(write_outbox "$to" "$reply" "" "$stem" "$extras_arg")"
-    log_info "[$stem] wrote reply → $out_path"
+    out_path="$(write_outbox "$b_to" "$reply" "" "$b_stem" "$extras_arg")"
+    log_info "[$b_stem] wrote reply → $out_path"
   )
 
   if [[ "$KEEP_PROCESSED" != "1" ]]; then

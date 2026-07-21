@@ -36,6 +36,11 @@ WABOX_SEND_KEEP_DAYS="${WABOX_SEND_KEEP_DAYS:-7}"
 # Quote-reply policy: auto|always|never. auto quotes in groups or when a newer
 # message for the same chat is still queued (so replies stay threaded).
 WABOX_QUOTE_REPLY="${WABOX_QUOTE_REPLY:-auto}"
+# Message batching: a burst sent together (image + caption, several photos and a
+# line of text) arrives as separate envelopes. Coalesce them into ONE agent turn
+# by waiting this many seconds of quiet after the last message. 0 = off (don't
+# wait). Raise it on flaky connections where a burst dribbles in slowly.
+WABOX_BATCH_WINDOW="${WABOX_BATCH_WINDOW:-3}"
 
 # ── Memory & skills ───────────────────────────────────────────────────────────
 # A new *default* workdir (not a /cwd redirect) is seeded with an instructions

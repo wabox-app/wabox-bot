@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Message batching (debounce).** A burst sent together — an image with a
+  caption, several photos and a line of text — arrives as separate inbox
+  envelopes milliseconds apart. Previously each became its own agent turn, so
+  the agent saw fragments and (worse) could read one piece as the answer to a
+  parked yes/no while its real content was discarded. The per-envelope handler
+  is now two-phase: ingest (per envelope, parallel) prepares the turn-part and
+  appends it to a per-conversation queue; drain (serialized by the existing
+  per-conversation flock) waits out a quiet window and merges the whole burst
+  into **one** turn — concatenated text plus every attached file. Tunable via
+  `WABOX_BATCH_WINDOW` (seconds, default `3`; `0` disables the wait). New module
+  `lib/batch.sh`.
+- The `backend_reply` contract gains an optional 7th argument, `media_json` — a
+  JSON manifest of every media item in the (now possibly batched) turn. The
+  `claude-code` backend composes one instruction line per item, so a multi-image
+  burst is shown to the agent as a single turn. The first-item positional args
+  (`media_path`/`media_type`/`media_mime`) are unchanged, so backends that only
+  handle one file keep working (`docs/backends.md`).
+
+### Fixed
+
+- **`claude-code`: media sent while a permission request is parked is no longer
+  swallowed as a bogus yes/no answer.** An image/document can't be a yes/no, so
+  the backend now treats it as the user moving on: it drops the stale parked
+  permission and handles the message as a fresh turn instead of discarding it.
+
 ## [0.12.0] - 2026-07-07
 
 ### Changed

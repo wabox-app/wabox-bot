@@ -49,8 +49,8 @@ backend_reply() {
 }
 ```
 
-`backend_reply` may receive three optional trailing arguments —
-`backend_reply <slug> <conv_key> <stem> [media_path] [media_type] [media_mime]`.
+`backend_reply` may receive four optional trailing arguments —
+`backend_reply <slug> <conv_key> <stem> [media_path] [media_type] [media_mime] [media_json]`.
 When the inbound message carries stageable media, `media_path` is the file's
 location **relative to the working folder** (the backend's cwd), `media_type` is
 `image` or `document`, and `media_mime` is its MIME type. Audio is transcribed
@@ -59,6 +59,16 @@ never reach the backend as media (a caption on them arrives as plain text with a
 bracketed note). So backends see `image | document` here, and should read the
 file at `media_path` — the MIME helps for the extension-less names common on
 WhatsApp forwards. Backends that don't handle media simply ignore these arguments.
+
+**One turn can carry several media.** Because the loop batches a burst (an image
+with a caption, or several photos and a line of text — see `WABOX_BATCH_WINDOW`
+and `lib/batch.sh`) into a single `backend_reply` call, `media_path`/`media_type`/
+`media_mime` describe only the **first** item. The full set is `media_json`
+(arg 7): a JSON array of `{path, type, mime}` objects in arrival order (`[]` when
+there's no media). A backend that wants to show the agent *all* the files — like
+`claude-code`, which composes one instruction line per item — should read
+`media_json`; one that only handles a single file can keep using the first-item
+positional args and gracefully see just the first of a burst.
 
 ### Optional
 

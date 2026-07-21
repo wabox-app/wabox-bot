@@ -198,24 +198,28 @@ cc_has_pending_permission() {
   return 0
 }
 
-# Compose the prompt fed to claude on stdin. With an image we prepend a short
-# instruction pointing the agent at the staged file (relative to its cwd),
-# then the caption. Any other media type (audio is already transcribed into
-# text upstream) passes the text through unchanged.
+# Compose the prompt fed to claude on stdin. `media_json` is the media manifest
+# — a JSON array of {path,type,mime} (empty, "[]", or absent when the turn has
+# no media). One instruction line is prepended per stageable item, pointing the
+# agent at the staged file (relative to its cwd), then the caption. A whole
+# burst of photos therefore reaches Claude as a single turn that lists every
+# file. Audio is transcribed into text upstream, so only image/document items
+# appear here; any other type is silently skipped.
 cc_compose_prompt() {
-  local text="$1" media_path="$2" media_type="$3" media_mime="${4:-}"
-  local line=""
-  if [[ -n "$media_path" ]]; then
-    case "$media_type" in
-      image)    line="The user sent an image at $media_path — view it and respond." ;;
-      document) line="The user sent a file at $media_path ($media_mime) — read it and respond." ;;
-    esac
+  local text="$1" media_json="${2:-}"
+  local lines=""
+  if [[ -n "$media_json" && "$media_json" != "[]" ]]; then
+    lines="$(jq -r '
+      .[]
+      | if   .type == "image"    then "The user sent an image at \(.path) — view it and respond."
+        elif .type == "document" then "The user sent a file at \(.path) (\(.mime)) — read it and respond."
+        else empty end' <<<"$media_json" 2>/dev/null || true)"
   fi
-  if [[ -n "$line" ]]; then
+  if [[ -n "$lines" ]]; then
     if [[ -n "$text" ]]; then
-      printf '%s\n\n%s' "$line" "$text"
+      printf '%s\n\n%s' "$lines" "$text"
     else
-      printf '%s' "$line"
+      printf '%s' "$lines"
     fi
   else
     printf '%s' "$text"
@@ -390,12 +394,15 @@ cc_handle_permission_response() {
   cc_emit_or_park "$slug" "$user_text" "$response_json"
 }
 
-# backend_reply(slug, conv_key, stem [, media_path [, media_type]]) — stdin = user text, stdout = reply.
-# Exit: 0 ok, 124 timed out, anything else = error (caller substitutes a
-# user-visible error message).
+# backend_reply(slug, conv_key, stem [, media_path media_type media_mime [, media_json]])
+# — stdin = user text, stdout = reply. Exit: 0 ok, 124 timed out, anything else
+# = error (caller substitutes a user-visible error message). Args 4-6 are the
+# first media item (kept for the positional contract); this backend composes
+# from the full manifest in arg 7 — a JSON array of {path,type,mime} — so a
+# multi-image burst is shown to the agent as one turn.
 backend_reply() {
   local slug="$1" conv_key="$2" stem="$3"
-  local media_path="${4:-}" media_type="${5:-}" media_mime="${6:-}"
+  local media_json="${7:-}"
   local text
   text="$(cat)"
 
@@ -415,12 +422,21 @@ backend_reply() {
   # user's answer to it — not a fresh prompt. (Expired pendings are cleared by
   # cc_has_pending_permission and fall through to the normal path below.)
   if cc_has_pending_permission "$slug"; then
-    cc_handle_permission_response "$slug" "$conv_key" "$stem" "$workdir" "$text"
-    return $?
+    # A parked yes/no is answered with *text*. If the user instead sends media,
+    # it cannot be the answer — treating it as one would swallow the image (the
+    # exact bug batching exists to kill). Take it as the user having moved on:
+    # drop the stale permission and handle this as a fresh turn, so the content
+    # is never discarded.
+    if [[ -z "$media_json" || "$media_json" == "[]" ]]; then
+      cc_handle_permission_response "$slug" "$conv_key" "$stem" "$workdir" "$text"
+      return $?
+    fi
+    log_info "[$stem] pending permission + inbound media → handling as a fresh turn"
+    cc_clear_pending_permission "$slug"
   fi
 
   local prompt
-  prompt="$(cc_compose_prompt "$text" "$media_path" "$media_type" "$media_mime")"
+  prompt="$(cc_compose_prompt "$text" "$media_json")"
   local response_json rc=0
   response_json="$(cc_run_turn "$slug" "$conv_key" "$stem" "$workdir" "$prompt")" || rc=$?
   if ((rc != 0)); then

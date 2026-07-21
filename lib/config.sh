@@ -96,6 +96,19 @@ case "$WABOX_QUOTE_REPLY" in
   *) WABOX_QUOTE_REPLY="auto" ;;
 esac
 
+# ---- Message batching (see lib/batch.sh) ------------------------------------
+# WhatsApp delivers a burst — an image with a caption, or several photos plus a
+# line of text — as separate inbox envelopes arriving within a fraction of a
+# second. Without coalescing, each becomes its own agent turn, so the agent sees
+# fragments and (worse) may read one piece as the answer to a parked yes/no.
+# We hold the per-conversation drain open for this many seconds of quiet after
+# the last message before running one merged turn. 0 ⇒ effectively off (drain
+# whatever is already queued, don't wait). Passed straight to sleep(1), so it's
+# sanitised to an int/decimal — a typo falls back to the default rather than
+# breaking the drain loop or injecting into the command.
+WABOX_BATCH_WINDOW="${WABOX_BATCH_WINDOW:-3}"
+[[ "$WABOX_BATCH_WINDOW" =~ ^[0-9]+(\.[0-9]+)?$ ]] || WABOX_BATCH_WINDOW=3
+
 # ---- Memory & skills (see docs/superpowers/specs/2026-07-06-memory-and-skills) --
 # A new *default* workdir (never a /cwd redirect) is seeded with this
 # instructions file teaching the agent WhatsApp etiquette (markup, chat-sized
@@ -152,7 +165,7 @@ CONFIG_VARS=(
   CLAUDE_ARGS CLAUDE_BIN CLAUDE_TIMEOUT
   DEBUG GROUP_PER_PARTICIPANT IGNORE_FROM_ME KEEP_PROCESSED
   LOG_FILE PROCESSED_DIR SHUTDOWN_DRAIN_TIMEOUT STATE_DIR SYSTEM_PROMPT_FILE
-  WABOX_ACK_REACT WABOX_BOT_ALLOW_REMOTE_UPDATE WABOX_BOT_BACKEND
+  WABOX_ACK_REACT WABOX_BATCH_WINDOW WABOX_BOT_ALLOW_REMOTE_UPDATE WABOX_BOT_BACKEND
   WABOX_BOT_UPDATE_CHECK WABOX_BOT_UPDATE_NET_TIMEOUT WABOX_DOC_MAX_MB
   WABOX_FW_COMPUTE WABOX_FW_DEVICE WABOX_FW_MODEL
   WABOX_INBOX WABOX_MEDIA_DIR WABOX_MEDIA_KEEP_DAYS

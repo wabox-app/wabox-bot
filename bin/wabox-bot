@@ -331,7 +331,8 @@ fi
 #   - backend resolves WABOX_BOT_BACKEND, sources lib/backends/<name>.sh,
 #     and runs the backend's own dep check
 #   - commands depends on backend_* hooks being available
-#   - inbox depends on routing, outbox, commands, backend
+#   - batch is self-contained (SESSIONS_DIR + jq); inbox drains it
+#   - inbox depends on routing, outbox, commands, batch, backend
 #   - loop depends on inbox
 # shellcheck source=lib/config.sh
 source "$LIB_DIR/config.sh"
@@ -374,6 +375,8 @@ source "$LIB_DIR/migrate.sh"
 run_migrations
 # shellcheck source=lib/commands.sh
 source "$LIB_DIR/commands.sh"
+# shellcheck source=lib/batch.sh
+source "$LIB_DIR/batch.sh"
 # shellcheck source=lib/inbox.sh
 source "$LIB_DIR/inbox.sh"
 # shellcheck source=lib/loop.sh

@@ -18,6 +18,10 @@ setup_lib() {
   # a guaranteed-absent path; config.sh only sources an existing file. Tests
   # that want a config (config.bats) export their own after calling setup_lib.
   export WABOX_BOT_CONFIG="$TMPDIR_TEST/no-config"
+  # Disable the message-batching debounce by default so handle_envelope drains
+  # synchronously and the suite doesn't sleep the window on every envelope.
+  # batch.bats overrides this to exercise the real window.
+  export WABOX_BATCH_WINDOW=0
   mkdir -p "$WABOX_INBOX" "$WABOX_OUTBOX"
 
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
@@ -60,4 +64,6 @@ load_core() {
   source "$LIB_DIR/migrate.sh"
   # shellcheck source=lib/commands.sh
   source "$LIB_DIR/commands.sh"
+  # shellcheck source=lib/batch.sh
+  source "$LIB_DIR/batch.sh"
 }
