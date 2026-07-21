@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-07-21
+
 ### Added
 
 - **Message batching (debounce).** A burst sent together — an image with a
@@ -397,7 +399,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `install.sh` one-liner: clones to `~/.local/share/wabox-bot`, symlinks
   `bin/wabox-bot` into `~/.local/bin/`.
 
-[Unreleased]: https://github.com/wabox-app/wabox-bot/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/wabox-app/wabox-bot/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/wabox-app/wabox-bot/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/wabox-app/wabox-bot/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/wabox-app/wabox-bot/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/wabox-app/wabox-bot/compare/v0.9.0...v0.10.0
