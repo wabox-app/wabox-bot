@@ -62,6 +62,12 @@ load_core() {
   source "$LIB_DIR/backend.sh"
   # shellcheck source=lib/migrate.sh
   source "$LIB_DIR/migrate.sh"
+  # shellcheck source=lib/send.sh
+  source "$LIB_DIR/send.sh"
+  # shellcheck source=lib/prompt.sh
+  source "$LIB_DIR/prompt.sh"
+  # shellcheck source=lib/schedule.sh
+  source "$LIB_DIR/schedule.sh"
   # shellcheck source=lib/commands.sh
   source "$LIB_DIR/commands.sh"
   # shellcheck source=lib/batch.sh

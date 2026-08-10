@@ -20,6 +20,9 @@ takes care of:
 - **Slash commands** (`/clear`, `/status`, `/ping`, `/help`, `/cwd`, `/memory`,
   `/update`, plus backend-owned ones like `/model`, `/mode`, `/system` for the
   Claude Code backend).
+- **Scheduled jobs** — ask for a reminder or a standing check from the chat
+  itself: `/in 2h …`, `/at 18:00 …`, `/every 30m …`, `/daily 09:00 …`, then
+  `/jobs` and `/cancel <n>`. See **Scheduled jobs** below.
 - **Per-conversation working folder** — each conversation's agent runs in its
   own directory (auto `$STATE_DIR/work/<slug>` by default), so file operations
   stay isolated. Redirect one with `/cwd <path>` (e.g. `/cwd ~/Valter`);
@@ -362,8 +365,60 @@ Exit codes — `send`: `0` sent · `1` usage / unknown slug / unreadable file.
 suppressed (NOOP — success for cron, but distinguishable) · `124` backend
 timeout.
 
-See [`examples/heartbeat/`](examples/heartbeat/) for a complete cron and systemd
-walkthrough of a morning-digest / reminder heartbeat.
+See [`examples/heartbeat/`](examples/heartbeat/) for the cron and systemd
+walkthrough — still the right tool for a *machine-level* job (one that should run
+whether or not the daemon is up, or that isn't tied to one conversation).
+
+## Scheduled jobs
+
+For anything tied to a conversation, don't touch a crontab: ask for it in the
+chat. The daemon keeps its own schedule and fires each job as a real agent turn
+in the conversation that registered it.
+
+```
+/in 2h take the chicken out of the freezer
+/at 18:00 call the dentist
+/at 2026-08-12 09:00 renew the passport
+/every 30m check my calendar and only ping me if something needs me
+/daily 09:00 morning digest: calendar, todos, anything overdue
+/jobs
+/cancel 3            (or /cancel all)
+```
+
+- **One-shots** (`/in`, `/at`) fire once and delete themselves. Times are
+  forgiving about phone typing — `9`, `9:00`, `9h30`, `9am`, `21:30` all parse —
+  and a bare time that has already passed today means tomorrow. Durations are
+  `90s`, `30m`, `2h`, `1d`, `1w` or combinations (`1h30m`); a bare number is
+  minutes.
+- **Recurring jobs** (`/every`, `/daily`) fire as a *heartbeat*: the turn is told
+  nobody is waiting and that it should reply `NOOP` unless something genuinely
+  needs you, so a quiet check sends nothing. A one-shot gets the opposite
+  instruction — a reminder must never be suppressed.
+- **Firing is the `prompt` verb**, so everything above applies: the
+  per-conversation lock, the working folder, the send folder (a scheduled turn
+  can attach a file it generates), and session continuity — a later "what did you
+  remind me about?" works.
+- `/jobs` prints each job's next run **and the zone it resolved in**. Set
+  `WABOX_JOB_TZ` (e.g. `America/Sao_Paulo`) if the daemon runs under a unit with
+  a stripped environment, or "09:00" will quietly mean 09:00 UTC. Daily jobs
+  re-resolve their wall-clock time after every run, so they hold their hour
+  across a DST change instead of drifting by one.
+
+**After downtime**, a one-shot fires however late it is (and says so); a
+recurring job whose slot is older than `WABOX_JOB_CATCHUP` (default 1h) skips
+that occurrence, so a laptop asleep overnight doesn't wake to eight backed-up
+hourly checks. If a job comes due while you're mid-conversation it retries on the
+next tick rather than being dropped.
+
+`/clear` resets the session but deliberately leaves the schedule alone —
+forgetting the conversation is not cancelling a reminder. `wabox-bot rm <slug>`
+does remove its jobs. Knobs: `WABOX_JOB_TICK` (scan interval, 20s),
+`WABOX_JOB_MAX` (jobs per conversation, 50), `WABOX_JOB_MIN_INTERVAL` (floor
+under `/every`, 60s).
+
+Every one of these works through `wabox-bot cmd <slug> "/daily 09:00 …"` too, so
+scheduling is scriptable — and an agent with shell access can register its own
+follow-ups that way.
 
 ## Migrating from `wabox/examples/wabox-claude-code.sh`
 

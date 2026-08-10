@@ -137,7 +137,35 @@ WABOX_MEDIA_KEEP_DAYS="${WABOX_MEDIA_KEEP_DAYS:-30}"
 # in the project's history — set to 0 to restore the old keep-everything behavior.
 WABOX_PROCESSED_KEEP_DAYS="${WABOX_PROCESSED_KEEP_DAYS:-90}"
 
-mkdir -p "$STATE_DIR" "$SESSIONS_DIR" "$LOCKS_DIR" "$PROCESSED_DIR" \
+# ---- Scheduled jobs (see docs/superpowers/specs/2026-08-09-scheduled-jobs) --
+# One job per file under $JOBS_DIR/<slug>/<id>.json — per-conversation dirs so
+# /jobs scoping and `rm <slug>` cleanup are directory operations, not filters.
+JOBS_DIR="$STATE_DIR/jobs"
+# Wall-clock rules (/at, /daily) resolve in this zone; empty ⇒ the daemon's own
+# local time. Resolved at creation and stored *per job*, so editing this later
+# never silently moves reminders that already exist. Set it if the daemon runs
+# under a unit with a stripped environment (systemd gives you UTC, not your TZ).
+WABOX_JOB_TZ="${WABOX_JOB_TZ:-}"
+# How often the main loop scans for due jobs. The loop itself wakes every second;
+# this throttles the scan (one `jq` over the job files) to something sane.
+WABOX_JOB_TICK="${WABOX_JOB_TICK:-20}"
+[[ "$WABOX_JOB_TICK" =~ ^[0-9]+$ ]] && ((WABOX_JOB_TICK > 0)) || WABOX_JOB_TICK=20
+# Grace window, in seconds, for a run whose slot has already passed — after
+# daemon downtime, or while the conversation lock stayed busy. A *recurring* job
+# older than this skips the occurrence entirely (a laptop asleep overnight must
+# not wake to eight backed-up hourly checks); a *one-shot* always fires however
+# late, and this only bounds how long a lock-busy retry keeps trying.
+WABOX_JOB_CATCHUP="${WABOX_JOB_CATCHUP:-3600}"
+[[ "$WABOX_JOB_CATCHUP" =~ ^[0-9]+$ ]] || WABOX_JOB_CATCHUP=3600
+# Guardrails, because the agent can create jobs too (it shells out to
+# `wabox-bot job add`): a per-conversation cap, and a floor under /every so a
+# stray `/every 1s` can't hammer the backend forever.
+WABOX_JOB_MAX="${WABOX_JOB_MAX:-50}"
+[[ "$WABOX_JOB_MAX" =~ ^[0-9]+$ ]] || WABOX_JOB_MAX=50
+WABOX_JOB_MIN_INTERVAL="${WABOX_JOB_MIN_INTERVAL:-60}"
+[[ "$WABOX_JOB_MIN_INTERVAL" =~ ^[0-9]+$ ]] || WABOX_JOB_MIN_INTERVAL=60
+
+mkdir -p "$STATE_DIR" "$SESSIONS_DIR" "$LOCKS_DIR" "$JOBS_DIR" "$PROCESSED_DIR" \
   "$(dirname "$LOG_FILE")" "$WABOX_OUTBOX"
 
 need() {
@@ -168,7 +196,8 @@ CONFIG_VARS=(
   WABOX_ACK_REACT WABOX_BATCH_WINDOW WABOX_BOT_ALLOW_REMOTE_UPDATE WABOX_BOT_BACKEND
   WABOX_BOT_UPDATE_CHECK WABOX_BOT_UPDATE_NET_TIMEOUT WABOX_DOC_MAX_MB
   WABOX_FW_COMPUTE WABOX_FW_DEVICE WABOX_FW_MODEL
-  WABOX_INBOX WABOX_MEDIA_DIR WABOX_MEDIA_KEEP_DAYS
+  WABOX_INBOX WABOX_JOB_CATCHUP WABOX_JOB_MAX WABOX_JOB_MIN_INTERVAL
+  WABOX_JOB_TICK WABOX_JOB_TZ WABOX_MEDIA_DIR WABOX_MEDIA_KEEP_DAYS
   WABOX_OPENAI_WHISPER_MODEL WABOX_OUTBOX WABOX_PROCESSED_KEEP_DAYS
   WABOX_QUOTE_REPLY WABOX_SEND_DIR WABOX_SEND_KEEP_DAYS
   WABOX_STT_API_KEY WABOX_STT_API_MODEL WABOX_STT_API_URL

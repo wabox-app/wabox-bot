@@ -174,6 +174,12 @@ if [[ "${1:-}" == "state" || "${1:-}" == "transcript" || "${1:-}" == "cmd" \
     cmd)
       # handle_slash_command needs only $LOCKS_DIR + write_outbox + the backend
       # hooks + workdir helpers, all sourced above; it takes its own flocks.
+      # schedule.sh comes along so /in, /at, /every, /daily, /jobs and /cancel
+      # work through `cmd` too — that's the CLI mirror for scheduling (and how
+      # an agent with shell access registers its own follow-ups). Firing is a
+      # daemon job, so prompt/send aren't needed on this path.
+      # shellcheck source=lib/schedule.sh
+      source "$LIB_DIR/schedule.sh"
       # shellcheck source=lib/commands.sh
       source "$LIB_DIR/commands.sh"
       # shellcheck source=lib/cmd.sh
@@ -330,6 +336,8 @@ fi
 #   - routing and outbox are self-contained
 #   - backend resolves WABOX_BOT_BACKEND, sources lib/backends/<name>.sh,
 #     and runs the backend's own dep check
+#   - send + prompt define the delivery verbs the scheduler fires; schedule
+#     needs them (and outbox/senddir/workdir) at call time, commands at dispatch
 #   - commands depends on backend_* hooks being available
 #   - batch is self-contained (SESSIONS_DIR + jq); inbox drains it
 #   - inbox depends on routing, outbox, commands, batch, backend
@@ -373,6 +381,12 @@ run_backend_dependency_check
 # shellcheck source=lib/migrate.sh
 source "$LIB_DIR/migrate.sh"
 run_migrations
+# shellcheck source=lib/send.sh
+source "$LIB_DIR/send.sh"
+# shellcheck source=lib/prompt.sh
+source "$LIB_DIR/prompt.sh"
+# shellcheck source=lib/schedule.sh
+source "$LIB_DIR/schedule.sh"
 # shellcheck source=lib/commands.sh
 source "$LIB_DIR/commands.sh"
 # shellcheck source=lib/batch.sh

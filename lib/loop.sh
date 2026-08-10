@@ -14,6 +14,7 @@ run_main_loop() {
   log_info "  state     = $STATE_DIR"
   log_info "  processed = $PROCESSED_DIR$([[ $KEEP_PROCESSED == 1 ]] && echo "" || echo " (deleted after reply)")"
   log_info "  groupMode = $([[ $GROUP_PER_PARTICIPANT == 1 ]] && echo per-participant || echo per-chat)"
+  log_info "  jobs      = $STATE_DIR/jobs (tick ${WABOX_JOB_TICK}s, zone $(sched_tz_label))"
 
   if [[ ! -d "$WABOX_INBOX" ]]; then
     log_error "inbox directory does not exist: $WABOX_INBOX"
@@ -45,12 +46,17 @@ run_main_loop() {
   local path
   while ((!SHUTTING_DOWN)); do
     if IFS= read -r -t 1 path <&3; then
+      # Scheduled jobs are checked on *both* loop paths (sched_tick throttles
+      # itself to WABOX_JOB_TICK): a chat busy enough to satisfy every read
+      # must not starve the scheduler.
+      sched_tick
       [[ "$path" == *.json ]] || continue
       [[ -f "$path" ]] || continue
       safe_handle_envelope "$path" &
       CHILDREN[$!]=1
       reap_children
     else
+      sched_tick
       # Either the 1s timeout fired or inotifywait died. If the latter,
       # abort so systemd/launchd can restart us.
       if ! kill -0 "$INOTIFY_PID" 2>/dev/null; then

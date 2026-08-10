@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Scheduled jobs, registered from the chat.** `/in 2h …`, `/at 18:00 …`,
+  `/at 2026-08-12 09:00 …`, `/every 30m …` and `/daily 09:00 …` register a
+  standing turn for the conversation; `/jobs` lists them with their next run and
+  resolved timezone, `/cancel <n>` (or `/cancel all`) removes them. The daemon
+  now owns a clock: `lib/schedule.sh` keeps one JSON record per job under
+  `$STATE_DIR/jobs/<slug>/<id>.json` and the main loop scans for due ones every
+  `WABOX_JOB_TICK` seconds (default 20). Firing reuses `prompt_main` unchanged,
+  so a scheduled turn is a real turn — same per-conversation lock, working
+  folder, send-folder attachments, session continuity and `NOOP` suppression as
+  `wabox-bot prompt`. This reverses the "no scheduler inside wabox-bot"
+  non-goal from the proactive-messaging design; `examples/heartbeat/` remains
+  the right answer for machine-level jobs.
+  - Recurring jobs are wrapped in the heartbeat preamble (reply `NOOP` and
+    nothing is sent); one-shots are explicitly told *not* to, since a suppressed
+    reminder is a lost one.
+  - After downtime a one-shot fires however late it is and says so, while a
+    recurring job older than `WABOX_JOB_CATCHUP` (default 1h) skips the
+    occurrence instead of replaying a backlog. A job that comes due while the
+    conversation is busy is retried on the next tick, not dropped.
+  - Daily rules re-resolve their wall-clock time under the job's stored zone
+    after every run, so they keep their hour across a DST change.
+  - New config: `WABOX_JOB_TZ`, `WABOX_JOB_TICK`, `WABOX_JOB_CATCHUP`,
+    `WABOX_JOB_MAX` (default 50 per conversation), `WABOX_JOB_MIN_INTERVAL`
+    (default 60s floor under `/every`).
+  - The commands are core, not backend-owned, so `wabox-bot cmd <slug>
+    "/daily 09:00 …"` schedules from the CLI through the same code path.
+
+### Changed
+
+- `wabox-bot rm <slug>` now deletes the conversation's scheduled jobs along with
+  its session — a standing turn addressed to a deleted conversation would
+  otherwise recreate it out of nowhere. `/clear` deliberately does **not** touch
+  the schedule.
+
 ## [0.13.0] - 2026-07-21
 
 ### Added

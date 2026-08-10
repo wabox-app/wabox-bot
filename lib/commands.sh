@@ -77,6 +77,12 @@ $fence" "$id" "$stem")"
       log_info "[$stem] /memory → $reply_path"
       return 0
       ;;
+    /in | /at | /every | /daily | /jobs | /cancel)
+      # Scheduling lives in lib/schedule.sh; core owns these because nothing
+      # about them is backend-specific (and `wabox-bot cmd` gets them for free).
+      sched_handle_command "$cmd_word" "$cmd_args" "$slug" "$conv_key" "$to" "$id" "$stem"
+      return 0
+      ;;
     /status)
       local status_text status_wd
       # Resolve the path WITHOUT creating it (workdir_info's second line), then
@@ -107,6 +113,12 @@ update:  v$(cat -- "$STATE_DIR/update-available") available — send /update now
 /status          show session id, model, mode, system prompt
 /cwd <path>      set this conversation's working folder (/cwd default to reset)
 /memory          show what the agent remembers (MEMORY.md)
+/in 2h <what>    remind me once, in a while (30m, 2h, 1d, 1h30m)
+/at 18:00 <what> remind me once, at a time (or /at 2026-08-12 09:00 …)
+/every 30m <what>  repeat on an interval
+/daily 09:00 <what>  repeat every day at that time
+/jobs            list this conversation's scheduled jobs
+/cancel <n>      cancel one (/cancel all for every one)
 /update          check for a newer wabox-bot release (/update now to apply)
 /ping            quick liveness check"
       if declare -f backend_help >/dev/null; then

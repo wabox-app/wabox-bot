@@ -82,6 +82,9 @@ rm_main() {
   fi
 
   rm -rf -- "$SESSIONS_DIR/$slug"
+  # Scheduled jobs die with the conversation: a standing turn addressed to a
+  # session that no longer exists would recreate it out of nowhere.
+  rm -rf -- "${JOBS_DIR:?}/$slug"
   if [[ "$is_default" == true ]]; then
     rm -rf -- "$workdir"
     printf 'Removed conversation %s and its workdir %s.\n' "$slug" "$workdir"

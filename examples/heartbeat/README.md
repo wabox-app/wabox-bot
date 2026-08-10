@@ -7,9 +7,17 @@ checks whatever you told it to, and it messages you **only when it has something
 to say**. When it doesn't, it replies with the `NOOP` sentinel and nothing is
 sent.
 
-There is no scheduler inside wabox-bot by design — cron and systemd already own
-time, and keeping wabox-bot with no control plane keeps its security story
-simple. These are examples you copy and edit, not a bot feature you enable.
+> **Start with `/every` instead.** Since v0.14.0 the daemon has its own
+> scheduler, and you can register a heartbeat from the chat with one message:
+> `/every 30m check my calendar and only ping me if something needs me`, or
+> `/daily 09:00 morning digest`. `/jobs` lists them, `/cancel <n>` removes them.
+> See the README's **Scheduled jobs** section. It is the same standing-prompt
+> idea with the same `NOOP` suppression — you just don't edit a crontab.
+>
+> The cron and systemd recipes below are still the right answer when the job
+> should run **whether or not the daemon is up**, when it belongs to the machine
+> rather than to a conversation, or when you want the scheduling to live in
+> config management next to your other units.
 
 Files here:
 

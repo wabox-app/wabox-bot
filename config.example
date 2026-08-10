@@ -67,6 +67,21 @@ WABOX_MEDIA_KEEP_DAYS="${WABOX_MEDIA_KEEP_DAYS:-30}"     # staged inbound media
 # set 0 to restore the old keep-everything behavior.
 WABOX_PROCESSED_KEEP_DAYS="${WABOX_PROCESSED_KEEP_DAYS:-90}"
 
+# ── Scheduled jobs ────────────────────────────────────────────────────────────
+# Register standing turns from the chat: /in 2h …, /at 18:00 …, /every 30m …,
+# /daily 09:00 …, then /jobs and /cancel <n>. A job is a `prompt` turn in the
+# conversation that created it; recurring ones reply NOOP to stay silent.
+# Zone for wall-clock rules (/at, /daily); empty = the daemon's local time.
+# SET THIS if the daemon runs under systemd with a stripped environment —
+# otherwise "09:00" means 09:00 UTC. /jobs always prints the zone it resolved.
+WABOX_JOB_TZ="${WABOX_JOB_TZ:-}"                         # e.g. America/Sao_Paulo
+WABOX_JOB_TICK="${WABOX_JOB_TICK:-20}"                   # seconds between due-job scans
+# Grace for a run whose slot already passed (downtime, or the chat stayed busy):
+# a recurring job older than this skips the occurrence, a one-shot always fires.
+WABOX_JOB_CATCHUP="${WABOX_JOB_CATCHUP:-3600}"
+WABOX_JOB_MAX="${WABOX_JOB_MAX:-50}"                     # jobs per conversation
+WABOX_JOB_MIN_INTERVAL="${WABOX_JOB_MIN_INTERVAL:-60}"   # floor under /every
+
 # ── Self-update ───────────────────────────────────────────────────────────────
 # On startup the daemon checks (backgrounded, best-effort) for a newer published
 # release and logs a notice; `wabox-bot --update` applies it. See README.
