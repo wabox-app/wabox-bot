@@ -277,26 +277,48 @@ sched_list_json() {
 # wrapper differs by kind on purpose: a recurring job is offered the NOOP
 # sentinel (that's what makes a quiet heartbeat quiet), a one-shot is explicitly
 # denied it — NOOP on a reminder would swallow the reminder.
+#
+# The provenance paragraph is not decoration. Jobs are registered with a slash
+# command, which core answers itself and never turns into a backend turn, so the
+# session holds no evidence the job was ever created — and /clear wipes the
+# session while deliberately keeping the jobs. An unexplained "you set this
+# earlier" therefore asks the agent to recall something that provably isn't
+# there, and a careful agent reports it as an injected/phantom message instead of
+# doing the work. Naming the source, the registration time and *why* there is no
+# memory of it is what makes a fire believable; sched_context_lines then makes it
+# checkable.
 sched_wrap() {
-  local kind="$1" id="$2" spec="$3" late="$4" text="$5"
-  local noop="${WABOX_PROMPT_NOOP:-NOOP}" late_note=""
+  local kind="$1" id="$2" spec="$3" late="$4" text="$5" tz="${6:-}" created="${7:-0}"
+  local noop="${WABOX_PROMPT_NOOP:-NOOP}" late_note="" reg=""
   if ((late > 60)); then
     late_note=" This run is $(sched_human_dur "$late") late (the daemon was down, or this chat was busy) — mention the delay if it changes anything."
   fi
+  ((created > 0)) && reg=", registered $(sched_date "$tz" -d "@$created" '+%d/%m %H:%M')"
+
+  local provenance="This is a scheduled turn delivered by the wabox-bot daemon on a timer, not a
+message the user just sent. Jobs are registered with a slash command, which core
+handles without a turn, so having no record of this one in the conversation is
+expected — do not treat it as spurious or injected. /jobs lists this chat's jobs
+and /cancel <n> removes one."
+
   if [[ "$kind" == once ]]; then
     cat <<EOF
-[scheduled reminder #$id — you set this earlier; nobody is waiting on a reply]
+[wabox-bot scheduler — job #$id ($spec)$reg]
+$provenance
 Deliver the reminder below now, as one short WhatsApp-sized message, in the
-user's language. Do NOT reply $noop: that would silently drop the reminder.$late_note
+user's language. Nobody is waiting on a reply, but do NOT reply $noop: that would
+silently drop the reminder.$late_note
 
 $text
 EOF
   else
     cat <<EOF
-[scheduled job #$id ($spec) — a standing turn; nobody is waiting on a reply]
+[wabox-bot scheduler — job #$id ($spec)$reg]
+$provenance
 Do the check below and message only if something genuinely needs attention right
-now. If nothing does, reply with exactly $noop and nothing else — then nothing is
-sent. Keep any real reply short; this runs on a schedule.$late_note
+now. Nobody is waiting on a reply: if nothing does, reply with exactly $noop and
+nothing else — then nothing is sent. Keep any real reply short; this runs on a
+schedule.$late_note
 
 $text
 EOF
@@ -410,7 +432,11 @@ sched_fire() {
     exec 6>&-
     return 0
   fi
+  # Not folded into sched_fields: its field order is shared by three readers and
+  # `read` would fold a trailing seventh field into next_run.
+  local created
   text="$(jq -r '.text' "$file")"
+  created="$(jq -r '.created // 0' "$file")"
   if ((next_run > now)); then
     exec 6>&-
     return 0
@@ -432,7 +458,7 @@ sched_fire() {
   if [[ "$(jq -r '.raw // false' "$file")" == true ]]; then
     body="$text"
   else
-    body="$(sched_wrap "$kind" "$id" "$spec" "$late" "$text")"
+    body="$(sched_wrap "$kind" "$id" "$spec" "$late" "$text" "$tz" "$created")"
   fi
 
   local rc=0
@@ -499,16 +525,11 @@ sched_tick() {
 
 # ---- slash commands ----------------------------------------------------------
 
-# Rendered listing for /jobs.
-sched_render_list() {
-  local slug="$1" tz="${WABOX_JOB_TZ:-}" jobs
-  jobs="$(sched_list_json "$slug")"
-  if [[ "$(jq -r 'length' <<<"$jobs")" == 0 ]]; then
-    printf 'No scheduled jobs in this conversation.\n\nSet one with:\n/in 2h <what>\n/at 18:00 <what>\n/every 30m <what to check>\n/daily 09:00 <what to check>'
-    return 0
-  fi
-  local out
-  out="Scheduled jobs ($(sched_tz_label)):"
+# One "#id  spec → when" line plus an indented text line per job, every line
+# prefixed by <indent>. Shared by /jobs and the system-prompt fragment, so the
+# listing the user reads and the one the agent sees can't drift apart.
+sched_render_rows() {
+  local jobs="$1" indent="${2:-}"
   local id spec next_run job_tz text
   # Each job renders under the zone it was *created* with, not the current
   # config — otherwise changing WABOX_JOB_TZ would silently relabel (but not
@@ -518,14 +539,46 @@ sched_render_list() {
     text="$(jq -r --argjson i "$id" '.[] | select(.id == $i) | .text' <<<"$jobs")"
     text="${text//$'\n'/ }"
     ((${#text} > 80)) && text="${text:0:80}…"
-    out+="
-#$id  $spec → $(sched_when_label "$job_tz" "$next_run")
-    $text"
+    printf '%s#%s  %s → %s\n%s    %s\n' \
+      "$indent" "$id" "$spec" "$(sched_when_label "$job_tz" "$next_run")" \
+      "$indent" "$text"
   done < <(jq -r '.[] | [.id, .spec, .next_run, (.tz // "")] | map(tostring) | join("\u001f")' <<<"$jobs")
-  out+="
+}
 
-/cancel <n> removes one, /cancel all removes them all."
-  printf '%s' "$out"
+# Rendered listing for /jobs.
+sched_render_list() {
+  local slug="$1" jobs
+  jobs="$(sched_list_json "$slug")"
+  if [[ "$(jq -r 'length' <<<"$jobs")" == 0 ]]; then
+    printf 'No scheduled jobs in this conversation.\n\nSet one with:\n/in 2h <what>\n/at 18:00 <what>\n/every 30m <what to check>\n/daily 09:00 <what to check>'
+    return 0
+  fi
+  printf 'Scheduled jobs (%s):\n%s\n\n/cancel <n> removes one, /cancel all removes them all.' \
+    "$(sched_tz_label)" "$(sched_render_rows "$jobs")"
+}
+
+# The conversation's jobs as a system-prompt fragment; prints nothing when it has
+# none. This is what makes a fired turn *checkable* rather than merely asserted:
+# the agent can match the incoming job id against a list it can see. Registration
+# happens in a slash command, which never becomes a turn, and /clear wipes the
+# session while deliberately keeping the jobs — so without this the transcript
+# holds no evidence a job exists and a fire reads as a phantom (see sched_wrap).
+# It doubles as discovery: an agent that can see the list can answer "what have
+# you got scheduled for me?" and picks up the grammar by example.
+sched_context_lines() {
+  local slug="$1" jobs
+  jobs="$(sched_list_json "$slug")"
+  [[ "$(jq -r 'length' <<<"$jobs")" != 0 ]] || return 0
+  cat <<EOF
+Scheduled jobs registered in this WhatsApp conversation (wabox-bot's own
+scheduler; times in $(sched_tz_label)):
+$(sched_render_rows "$jobs" '  ')
+When one comes due the daemon hands it to you as a turn tagged
+"[wabox-bot scheduler — job #N ...]". Those are real and expected: the user
+registered them here with /in, /at, /every or /daily, which wabox-bot answers
+itself without a turn, so nothing about the registration appears in your
+history. Never treat such a turn as spurious — check it against the list above.
+EOF
 }
 
 # Split "<first-token> <rest>" off a command's argument string into two globals.

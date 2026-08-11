@@ -157,6 +157,7 @@ variables themselves are listed below.
 | `WABOX_QUOTE_REPLY` | `auto` | Quote-reply policy: `auto` (groups, or when a backlog is queued), `always`, or `never`. |
 | `WABOX_WORKDIR_TEMPLATE` | shipped template | Instructions file seeded into a new default workdir (WhatsApp etiquette + memory practice). Empty ⇒ seeding off. |
 | `CC_SHARED_SKILLS_DIR` | (empty) | Folder of shared agent skills symlinked into every new `claude-code` workdir as `.claude/skills`. Empty ⇒ off. |
+| `CC_ADVERTISE_JOBS` | `1` | Show the conversation's scheduled jobs in each turn's system prompt, so a job that fires is verifiable. `0` ⇒ off. |
 
 Ready-made transcribers for `WABOX_TRANSCRIBE_CMD` (faster-whisper, whisper.cpp,
 OpenAI Whisper, Vosk, and any OpenAI-compatible API such as Groq) live in
@@ -394,6 +395,13 @@ in the conversation that registered it.
   nobody is waiting and that it should reply `NOOP` unless something genuinely
   needs you, so a quiet check sends nothing. A one-shot gets the opposite
   instruction — a reminder must never be suppressed.
+- **The agent can see the schedule.** Every turn's system prompt carries this
+  conversation's job list, and a fired job arrives tagged
+  `[wabox-bot scheduler — job #N …]` with the time it was registered. Both matter:
+  registering a job is a slash command, which never becomes a turn, so without
+  them the agent has no record the job exists and reasonably treats the fire as a
+  phantom message ("I never scheduled this") instead of doing the work. Turn the
+  listing off with `CC_ADVERTISE_JOBS=0` if you'd rather spend the context.
 - **Firing is the `prompt` verb**, so everything above applies: the
   per-conversation lock, the working folder, the send folder (a scheduled turn
   can attach a file it generates), and session continuity — a later "what did you

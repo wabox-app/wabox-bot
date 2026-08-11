@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The agent can see the conversation's scheduled jobs.** Each `claude-code`
+  turn's system prompt now carries the job list for that conversation (id, spec,
+  next run, text), plus a note that a job coming due arrives as a turn tagged
+  `[wabox-bot scheduler — job #N …]`. New `CC_ADVERTISE_JOBS` (default `1`) turns
+  it off.
+
+### Fixed
+
+- **A scheduled job no longer reads as a phantom message.** Registering a job is
+  a slash command, which core answers without a backend turn, and `/clear` keeps
+  jobs while wiping the session — so nothing in the conversation corroborated a
+  fire. The old wrapper's unexplained "you set this earlier" asked the agent to
+  recall something that was provably not there, and agents duly refused the work
+  and reported "ghost reminders" instead. Fires are now tagged
+  `[wabox-bot scheduler — job #N (spec), registered <when>]` and state why no
+  record of the registration exists; the new system-prompt listing above makes
+  the claim checkable rather than merely asserted.
+
 ## [0.14.0] - 2026-08-10
 
 ### Added

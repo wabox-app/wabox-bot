@@ -341,7 +341,7 @@ job_field() { jq -r "$2" "$(job_file "$1")"; }
 @test "a one-shot is told NOT to reply NOOP; a recurring one is offered it" {
   setup_sched
   once="$(sched_wrap once 1 "once" 0 "call the dentist")"
-  [[ "$once" == *"Do NOT reply NOOP"* ]]
+  [[ "$once" == *"do NOT reply NOOP"* ]]
   [[ "$once" == *"call the dentist"* ]]
   rec="$(sched_wrap daily 2 "daily 09:00" 0 "check the calendar")"
   [[ "$rec" == *"reply with exactly NOOP"* ]]
@@ -365,7 +365,13 @@ stub_prompt(){
   : >"$STUB_LOG"
   prompt_main() { printf '%s\n' "$2" >>"$STUB_LOG"; return "$STUB_RC"; }
 }
-fired_count() { [ -s "$STUB_LOG" ] && grep -c '^\[scheduled' "$STUB_LOG" || printf 0; }
+# `grep -c` prints 0 *and* exits 1 with no match, which would make the || arm
+# print a second 0 — hence the explicit test rather than a bare short-circuit.
+fired_count() {
+  local n=0
+  [ -s "$STUB_LOG" ] && n="$(grep -c '^\[wabox-bot scheduler' "$STUB_LOG" || true)"
+  printf '%s' "$n"
+}
 
 # Move a job's next_run to `now + offset` so the tick sees it as due.
 set_due() { jq --argjson t "$(($(date +%s) + $2))" '.next_run = $t' "$(job_file "$1")" >"$TMPDIR_TEST/j" && mv "$TMPDIR_TEST/j" "$(job_file "$1")"; }
@@ -390,7 +396,7 @@ tick_now() { SCHED_LAST_TICK=0; sched_tick; wait; }
   [ "$(fired_count)" -eq 1 ]
   # Fired on time ⇒ no lateness note at all.
   ! grep -q "late" "$STUB_LOG"
-  grep -q "scheduled reminder #1" "$STUB_LOG"
+  grep -q "wabox-bot scheduler — job #1 (once" "$STUB_LOG"
   teardown_lib
 }
 
@@ -509,6 +515,52 @@ tick_now() { SCHED_LAST_TICK=0; sched_tick; wait; }
   [ "$(fired_count)" -eq 1 ]
   grep -q "late" "$STUB_LOG"
   [ ! -f "$(job_file 1)" ]
+  teardown_lib
+}
+
+# ---- provenance: why a fire isn't mistaken for a phantom ---------------------
+
+@test "a fired turn carries its provenance and explains the missing history" {
+  # Registration happens in a slash command, which never becomes a turn, so the
+  # session holds no trace of it. Without the explanation the agent reasonably
+  # reads the fire as an injected message and reports a "ghost reminder" instead
+  # of doing the work.
+  setup_sched
+  stub_prompt 0
+  cmd_reply "/daily 09:00 morning brief" >/dev/null
+  set_due 1 -5
+  tick_now
+  grep -q "wabox-bot scheduler — job #1 (daily 09:00), registered" "$STUB_LOG"
+  grep -q "delivered by the wabox-bot daemon on a timer" "$STUB_LOG"
+  grep -q "do not treat it as spurious or injected" "$STUB_LOG"
+  grep -q "/jobs lists this chat's jobs" "$STUB_LOG"
+  teardown_lib
+}
+
+@test "sched_context_lines lists the chat's jobs, and is empty without any" {
+  setup_sched
+  [ -z "$(sched_context_lines "$SLUG")" ]
+  cmd_reply "/daily 09:00 morning brief" >/dev/null
+  cmd_reply "/every 1h check the calendar" >/dev/null
+  out="$(sched_context_lines "$SLUG")"
+  [[ "$out" == *"#1"* ]]
+  [[ "$out" == *"daily 09:00"* ]]
+  [[ "$out" == *"morning brief"* ]]
+  [[ "$out" == *"#2"* ]]
+  [[ "$out" == *"every 1h"* ]]
+  # The tag it teaches has to be the one sched_wrap actually emits.
+  [[ "$out" == *"[wabox-bot scheduler — job #N"* ]]
+  [[ "$out" == *"America/Sao_Paulo"* ]]
+  teardown_lib
+}
+
+@test "sched_context_lines is scoped to one conversation" {
+  setup_sched
+  other="beef5678"
+  mkdir -p "$JOBS_DIR/$other"
+  handle_slash_command "/daily 07:00 not yours" "$other" "x" "x" "" "s2"
+  [ -z "$(sched_context_lines "$SLUG")" ]
+  [[ "$(sched_context_lines "$other")" == *"not yours"* ]]
   teardown_lib
 }
 

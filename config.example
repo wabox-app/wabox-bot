@@ -99,6 +99,7 @@ CLAUDE_ARGS="${CLAUDE_ARGS:---permission-mode default}"
 CLAUDE_TIMEOUT="${CLAUDE_TIMEOUT:-180}"                  # seconds per turn
 CC_PERMISSION_TIMEOUT="${CC_PERMISSION_TIMEOUT:-600}"    # secs a parked permission stays answerable
 CC_ADVERTISE_SEND_DIR="${CC_ADVERTISE_SEND_DIR:-1}"      # 0 = don't tell the agent about the send folder
+CC_ADVERTISE_JOBS="${CC_ADVERTISE_JOBS:-1}"              # 0 = don't show the chat's scheduled jobs in the system prompt
 # SYSTEM_PROMPT_FILE="${SYSTEM_PROMPT_FILE:-}"           # global system prompt file
 
 # ── Transcription (core) ──────────────────────────────────────────────────────

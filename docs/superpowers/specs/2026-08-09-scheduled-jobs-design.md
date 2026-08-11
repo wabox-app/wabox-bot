@@ -91,6 +91,19 @@ with no new CLI verb: because the commands are core, `wabox-bot cmd <slug>
   already exists and is already tested. The job runner only decides *when* and
   *what text*, then interprets the exit code.
 
+- **A fire has to be *verifiable*, not just labelled.** Registration is a slash
+  command, which core answers itself and never turns into a backend turn, and
+  `/clear` wipes the session while keeping the jobs — so from inside the session
+  a fire has no antecedent whatsoever. A wrapper that merely asserts "you set
+  this earlier" therefore asks the agent to recall something provably absent, and
+  a careful agent concludes the message is injected and reports a phantom
+  reminder instead of doing the work (observed in practice: three consecutive
+  fires refused). Two halves fix it. The wrapper names the source, the
+  registration time, and *why* no memory of it exists; `sched_context_lines`
+  puts the conversation's job list in every turn's system prompt so the incoming
+  id can be matched against a list the agent can see. The second half also serves
+  discovery — it is how an agent learns the feature exists at all.
+
 - **The stored text is wrapped, and the wrapper differs by kind.** A recurring
   job gets the heartbeat preamble (nobody is waiting; reply exactly `NOOP` if
   nothing needs attention). A one-shot gets the opposite instruction — deliver

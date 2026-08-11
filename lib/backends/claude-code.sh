@@ -34,6 +34,10 @@ CC_PERMISSION_TIMEOUT="${CC_PERMISSION_TIMEOUT:-600}"
 # into the conversation's send folder are delivered over WhatsApp. Set 0 to keep
 # the agent unaware of the outgoing-file convention.
 CC_ADVERTISE_SEND_DIR="${CC_ADVERTISE_SEND_DIR:-1}"
+# Show the conversation's scheduled jobs in the system prompt, so a job that
+# fires is verifiable rather than a claim the session can't corroborate. Set 0
+# to keep the agent unaware of them (and expect it to distrust their turns).
+CC_ADVERTISE_JOBS="${CC_ADVERTISE_JOBS:-1}"
 
 backend_name() {
   printf 'claude-code\n'
@@ -255,6 +259,18 @@ cc_run_turn() {
   if [[ "$CC_ADVERTISE_SEND_DIR" == "1" ]]; then
     cmd+=(--append-system-prompt \
       "To send the user a file over WhatsApp, write it to $(senddir_path "$workdir")/ — any file you leave in that folder is attached to your reply and delivered.")
+  fi
+  # This conversation's scheduled jobs, so a fired turn can be checked against a
+  # list instead of taken on faith — registration happens in a slash command that
+  # never becomes a turn, so nothing else in the context says the job exists.
+  # `declare -F` guarded: the standalone `prompt`/`send` verbs don't source
+  # schedule.sh, and empty when the conversation has no jobs.
+  if [[ "$CC_ADVERTISE_JOBS" == "1" ]] && declare -F sched_context_lines >/dev/null; then
+    local jobs_ctx
+    jobs_ctx="$(sched_context_lines "$slug" || true)"
+    if [[ -n "$jobs_ctx" ]]; then
+      cmd+=(--append-system-prompt "$jobs_ctx")
+    fi
   fi
   local model_override
   model_override="$(cc_model_for "$slug" || true)"

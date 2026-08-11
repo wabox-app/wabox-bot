@@ -224,6 +224,19 @@ the backend — the reply contract stays "text on stdout". You get them for free
   existing agent-permission boundary (the agent can already read those files),
   not a new one; the loop never lets the agent choose the *recipient*.
 
+- **Scheduled jobs** — when a job registered with `/in`/`/at`/`/every`/`/daily`
+  comes due, core calls `backend_reply` with a wrapped prompt tagged
+  `[wabox-bot scheduler — job #N …]`. Your backend needs no code for this; it is
+  an ordinary turn. But the *agent* should be told the schedule exists, because
+  registration happens in a slash command that never reaches a backend — from
+  inside the session a fire has no antecedent, and a careful agent reports it as
+  an injected message rather than acting on it. `claude-code` appends
+  `sched_context_lines "$slug"` (the conversation's job list, empty when it has
+  none) as a system prompt when `CC_ADVERTISE_JOBS=1` (default); guard the call
+  with `declare -F sched_context_lines`, since the standalone `prompt`/`send`
+  verbs don't source `lib/schedule.sh`. Other backends can pass the same text
+  through their own prompt-shaping knob.
+
 ## A minimal backend
 
 ```bash
