@@ -80,6 +80,10 @@ Module map:
   the contract, and provides `backend_state_dir`.
 - **migrate.sh** — idempotent in-STATE_DIR migrations from the old flat layout.
 - **commands.sh** — core slash-command dispatcher.
+- **mcp.sh** — `wabox-bot mcp <slug>`: the scheduler as a stdio MCP server, one
+  process per conversation. Every tool is a slash command run through `cmd_main`.
+  Only JSON-RPC may reach stdout, so `mcp_main` moves the real stdout to fd 3 and
+  points stdout at stderr; the emitters write to fd 3.
 - **loop.sh** — catch-up of pre-existing inbox files + inotify-via-FIFO main loop.
 
 ## Critical invariants

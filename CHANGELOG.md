@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The scheduler as an MCP server: `wabox-bot mcp <slug>`.** A stdio JSON-RPC
+  server exposing `schedule_in`, `schedule_at`, `schedule_every`,
+  `schedule_daily`, `list_jobs` and `cancel_job`, so an agent can answer "me
+  lembra amanhã às 9" itself instead of the user typing `/in`. Each tool is the
+  matching slash command underneath (via `cmd_main`), so there is one grammar,
+  one set of limits and one set of replies. The slug is fixed in the server's
+  argv at registration time, so the tools are scoped to one conversation and the
+  agent never needs to know its own id. New module `lib/mcp.sh`.
+- **`/mcp` (claude-code backend)** — `/mcp add` registers that server in the
+  conversation's working folder; `/mcp remove` undoes it; `/mcp` reports status.
+  It writes `.mcp.json` **and** `.claude/settings.local.json`
+  (`enabledMcpjsonServers` plus `mcp__wabox` in `permissions.allow`), because in
+  headless mode a project server that isn't enabled and pre-allowed fails
+  silently — there is no approval prompt to answer. Status also warns when
+  Claude Code hasn't been trusted in that folder, since it then discards project
+  MCP config and permissions without a word in the chat.
+
 ## [0.15.0] - 2026-08-10
 
 ### Added

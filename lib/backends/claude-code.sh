@@ -38,6 +38,9 @@ CC_ADVERTISE_SEND_DIR="${CC_ADVERTISE_SEND_DIR:-1}"
 # fires is verifiable rather than a claim the session can't corroborate. Set 0
 # to keep the agent unaware of them (and expect it to distrust their turns).
 CC_ADVERTISE_JOBS="${CC_ADVERTISE_JOBS:-1}"
+# Name of the scheduler MCP server /mcp registers; must match lib/mcp.sh, which
+# the daemon does not source (see the guarded assignment there).
+MCP_SERVER_NAME="${MCP_SERVER_NAME:-wabox}"
 
 backend_name() {
   printf 'claude-code\n'
@@ -472,8 +475,129 @@ backend_clear() {
   rm -f -- "$d/session" "$d/session.cwd" "$d/pending_permission.json"
 }
 
+# ---- /mcp: register the scheduler MCP server in this workdir ----------------
+#
+# `.mcp.json` alone is not enough to make a project MCP server usable in
+# headless mode, and every missing piece fails *silently*:
+#   1. the server must be enabled — there is no approval prompt under `-p`, so
+#      it needs `enabledMcpjsonServers`;
+#   2. its tools must be pre-allowed, or the first call parks a permission;
+#   3. the workspace must be trusted, or Claude Code discards project settings
+#      altogether (it says so on stderr, which lands in our log).
+# So /mcp writes both files and reports the third rather than leaving the user
+# to discover each in turn.
+
+# Absolute path to this executable, for the spawn line. ROOT is set by
+# bin/wabox-bot before any lib is sourced; the PATH lookup is the fallback for
+# a lib sourced on its own (tests).
+cc_bot_path() {
+  if [[ -n "${ROOT:-}" && -x "$ROOT/bin/wabox-bot" ]]; then
+    printf '%s' "$ROOT/bin/wabox-bot"
+  else
+    command -v wabox-bot || printf 'wabox-bot'
+  fi
+}
+
+# Whole-file JSON rewrites, temp + rename in the same directory so a reader
+# never sees a half-written config. `jq -n` seeds the file when it's absent or
+# unparseable; we never merge into JSON we couldn't read.
+cc_json_update() {
+  local file="$1" filter="$2"
+  shift 2
+  local base tmp
+  if [[ -s "$file" ]] && jq -e . "$file" >/dev/null 2>&1; then
+    base="$(cat -- "$file")"
+  else
+    base='{}'
+  fi
+  tmp="$file.tmp.$$"
+  if ! jq "$@" "$filter" <<<"$base" >"$tmp"; then
+    rm -f -- "$tmp"
+    return 1
+  fi
+  mv -- "$tmp" "$file"
+}
+
+cc_mcp_registered() {
+  local workdir="$1"
+  [[ -s "$workdir/.mcp.json" ]] || return 1
+  jq -e --arg n "$MCP_SERVER_NAME" '.mcpServers[$n] != null' "$workdir/.mcp.json" >/dev/null 2>&1
+}
+
+# Claude Code records per-directory trust in ~/.claude.json. Absent or false and
+# the project's .mcp.json and settings are ignored — the failure we most want to
+# tell the user about, because nothing else surfaces it.
+cc_workspace_trusted() {
+  local workdir="$1" cfg="$HOME/.claude.json"
+  [[ -s "$cfg" ]] || return 1
+  jq -e --arg d "$workdir" '.projects[$d].hasTrustDialogAccepted == true' "$cfg" >/dev/null 2>&1
+}
+
+# No `env` block in the spawn line on purpose: bin/wabox-bot exports
+# WABOX_BOT_CONFIG in daemon mode, and the server is a grandchild of the daemon,
+# so it re-reads the same config file and resolves the same STATE_DIR. Pinning
+# paths here would silently outlive a later `config set`.
+cc_mcp_register() {
+  local slug="$1" workdir="$2"
+  local settings="$workdir/.claude/settings.local.json"
+  mkdir -p -- "$workdir/.claude" || return 1
+  # shellcheck disable=SC2016 # jq --arg names, not shell expansions
+  cc_json_update "$workdir/.mcp.json" \
+    '.mcpServers[$n] = {command: $cmd, args: ["mcp", $slug]}' \
+    --arg n "$MCP_SERVER_NAME" --arg cmd "$(cc_bot_path)" --arg slug "$slug" || return 1
+  # settings.local.json, not settings.json: the local file is the personal,
+  # git-ignored one, so a workdir that is also a tracked repo can't have this
+  # reverted by a pull.
+  # shellcheck disable=SC2016 # jq --arg names, not shell expansions
+  cc_json_update "$settings" \
+    '.enabledMcpjsonServers = ((.enabledMcpjsonServers // []) + [$n] | unique)
+     | .permissions.allow = ((.permissions.allow // []) + [$tool] | unique)' \
+    --arg n "$MCP_SERVER_NAME" --arg tool "mcp__$MCP_SERVER_NAME" || return 1
+}
+
+cc_mcp_unregister() {
+  local workdir="$1"
+  local settings="$workdir/.claude/settings.local.json"
+  if [[ -s "$workdir/.mcp.json" ]]; then
+    # shellcheck disable=SC2016 # jq --arg names, not shell expansions
+    cc_json_update "$workdir/.mcp.json" 'del(.mcpServers[$n])' \
+      --arg n "$MCP_SERVER_NAME" || return 1
+  fi
+  if [[ -s "$settings" ]]; then
+    # shellcheck disable=SC2016 # jq --arg names, not shell expansions
+    cc_json_update "$settings" \
+      '.enabledMcpjsonServers = ((.enabledMcpjsonServers // []) - [$n])
+       | .permissions.allow = ((.permissions.allow // []) - [$tool])' \
+      --arg n "$MCP_SERVER_NAME" --arg tool "mcp__$MCP_SERVER_NAME" || return 1
+  fi
+}
+
+cc_mcp_status_text() {
+  local slug="$1" workdir="$2" out
+  if cc_mcp_registered "$workdir"; then
+    out="Scheduler tools: registered in $workdir/.mcp.json"
+    if ! cc_workspace_trusted "$workdir"; then
+      out+="
+⚠️ but this folder isn't trusted by Claude Code, so the server is ignored. Run
+\`claude\` once in $workdir and accept the trust prompt."
+    fi
+    out+="
+
+A new session picks it up; /clear starts one."
+  else
+    out="Scheduler tools: not registered in this folder.
+/mcp add lets the agent schedule for you (schedule_in, schedule_at,
+schedule_every, schedule_daily, list_jobs, cancel_job) instead of you typing
+/in, /at, /every, /daily."
+  fi
+  printf '%s' "$out"
+}
+
 backend_help() {
   cat <<'EOF'
+/mcp             show whether the agent can schedule jobs itself
+/mcp add         let it (registers the scheduler MCP server in this folder)
+/mcp remove      undo that
 /model <name>    set per-conversation model (opus, sonnet, haiku, or full id)
 /model default   remove the model override
 /mode <name>     set per-conversation --permission-mode
@@ -593,6 +717,77 @@ backend_handle_command() {
   local cmd_word="$1" cmd_args="$2" slug="$3" conv_key="$4" to="$5" id="$6" stem="$7"
   local reply_path
   case "$cmd_word" in
+    /mcp)
+      local mcp_arg="${cmd_args%%[[:space:]]*}" mcp_workdir mcp_msg
+      mcp_workdir="$(conversation_workdir "$slug")"
+      case "$mcp_arg" in
+        "" | status)
+          reply_path="$(write_outbox "$to" "$(cc_mcp_status_text "$slug" "$mcp_workdir")" "$id" "$stem")"
+          log_info "[$stem] /mcp (show) → $reply_path"
+          return 0
+          ;;
+        add)
+          # Same flock as the other state-mutating commands: an in-flight turn
+          # in this conversation is reading these very files.
+          local mcp_rc=0
+          (
+            exec 8>"$LOCKS_DIR/$slug.lock"
+            flock -x 8
+            cc_mcp_register "$slug" "$mcp_workdir"
+          ) || mcp_rc=$?
+          if ((mcp_rc != 0)); then
+            reply_path="$(write_outbox "$to" \
+              "Couldn't write $mcp_workdir/.mcp.json — check the folder is writable." "$id" "$stem")"
+            log_warn "[$stem] /mcp add failed rc=$mcp_rc → $reply_path"
+            return 0
+          fi
+          mcp_msg="Done — I can schedule things myself now.
+
+Registered in $mcp_workdir:
+  .mcp.json                     the scheduler server
+  .claude/settings.local.json   enabled + tools pre-allowed
+
+Try \"me lembra amanhã às 9\". You keep /in, /at, /every, /daily, /jobs and
+/cancel either way."
+          if ! cc_workspace_trusted "$mcp_workdir"; then
+            mcp_msg+="
+
+⚠️ This folder isn't trusted by Claude Code, so it will ignore both files. Run
+\`claude\` once in $mcp_workdir and accept the trust prompt."
+          fi
+          mcp_msg+="
+
+Takes effect in a new session — /clear starts one."
+          reply_path="$(write_outbox "$to" "$mcp_msg" "$id" "$stem")"
+          log_info "[$stem] /mcp add → $mcp_workdir → $reply_path"
+          return 0
+          ;;
+        remove | rm | off)
+          local mcp_rc=0
+          (
+            exec 8>"$LOCKS_DIR/$slug.lock"
+            flock -x 8
+            cc_mcp_unregister "$mcp_workdir"
+          ) || mcp_rc=$?
+          if ((mcp_rc != 0)); then
+            reply_path="$(write_outbox "$to" \
+              "Couldn't update $mcp_workdir/.mcp.json." "$id" "$stem")"
+            log_warn "[$stem] /mcp remove failed rc=$mcp_rc → $reply_path"
+            return 0
+          fi
+          reply_path="$(write_outbox "$to" \
+            "Scheduler tools removed from $mcp_workdir. /clear starts a session without them." \
+            "$id" "$stem")"
+          log_info "[$stem] /mcp remove → $mcp_workdir → $reply_path"
+          return 0
+          ;;
+        *)
+          reply_path="$(write_outbox "$to" \
+            "Usage: /mcp (status) · /mcp add · /mcp remove" "$id" "$stem")"
+          return 0
+          ;;
+      esac
+      ;;
     /model)
       local model_arg="${cmd_args%%[[:space:]]*}"
       if [[ -z "$model_arg" ]]; then

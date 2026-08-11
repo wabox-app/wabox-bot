@@ -428,6 +428,38 @@ Every one of these works through `wabox-bot cmd <slug> "/daily 09:00 …"` too, 
 scheduling is scriptable — and an agent with shell access can register its own
 follow-ups that way.
 
+### Letting the agent schedule for you
+
+The commands above are things *you* type. To answer "me lembra amanhã às 9" the
+agent needs the scheduler as a tool, which is what `/mcp add` sets up:
+
+```
+/mcp add        register the scheduler as an MCP server in this conversation's folder
+/mcp            show whether it's registered (and whether Claude Code will honour it)
+/mcp remove     undo
+```
+
+It writes two files in the working folder and reports what it did:
+
+- `.mcp.json` — spawns `wabox-bot mcp <slug>`, a stdio MCP server exposing
+  `schedule_in`, `schedule_at`, `schedule_every`, `schedule_daily`, `list_jobs`
+  and `cancel_job`. The slug is baked into the spawn line, so the tools are
+  scoped to this conversation and the agent never has to know its own id.
+- `.claude/settings.local.json` — enables the server (`enabledMcpjsonServers`)
+  and pre-allows its tools (`permissions.allow`). Both are required in headless
+  mode, where there is no approval prompt; `settings.local.json` rather than
+  `settings.json` so a workdir that is also a git repo can't have it reverted
+  by a pull.
+
+Each tool is the matching slash command underneath — same grammar, same limits,
+same replies — so there is one scheduler, not two. It takes effect in a new
+session (`/clear` starts one).
+
+> If the folder isn't trusted by Claude Code, it ignores project MCP servers and
+> project permissions entirely, without saying so in the chat. `/mcp` warns when
+> that's the case; the fix is to run `claude` once in that folder and accept the
+> trust prompt.
+
 ## Migrating from `wabox/examples/wabox-claude-code.sh`
 
 If you've been running the in-tree example from the wabox repo, see
