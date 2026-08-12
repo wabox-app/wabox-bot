@@ -70,9 +70,15 @@ prompt_main() {
   senddir_prepare "$workdir" "$stem"
   senddir_prune "$workdir"
 
+  # Mark the turn synthetic. A backend must never read this text as the answer
+  # to a parked yes/no: nobody typed it, and the claude-code backend would
+  # otherwise hand a job's own preamble to cc_handle_permission_response —
+  # losing the job *and* resolving the permission with garbage. The env prefix
+  # scopes it to this call and doesn't leak. WABOX_TURN_MODE, when the caller
+  # set it, asks for a permission mode that overrides the conversation's /mode.
   local reply rc=0
   reply="$(printf '%s' "$text" |
-    backend_reply "$slug" "$conv_key" "$stem" "" "" "")" || rc=$?
+    WABOX_TURN_SYNTHETIC=1 backend_reply "$slug" "$conv_key" "$stem" "" "" "")" || rc=$?
 
   if ((rc == 124)); then
     printf 'wabox-bot prompt: backend timed out\n' >&2

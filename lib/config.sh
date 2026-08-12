@@ -157,6 +157,16 @@ WABOX_JOB_TICK="${WABOX_JOB_TICK:-20}"
 # late, and this only bounds how long a lock-busy retry keeps trying.
 WABOX_JOB_CATCHUP="${WABOX_JOB_CATCHUP:-3600}"
 [[ "$WABOX_JOB_CATCHUP" =~ ^[0-9]+$ ]] || WABOX_JOB_CATCHUP=3600
+# Permission mode for *scheduled* turns, when it should differ from the
+# conversation's own /mode. A job is unattended by definition, so a tool that
+# parks a yes/no doesn't just delay it — the question is delivered instead of
+# the reminder, and the occurrence is spent. Empty (default) ⇒ a job inherits
+# whatever the conversation uses, i.e. today's behaviour. Backends that have no
+# notion of permission modes ignore it.
+WABOX_JOB_MODE="${WABOX_JOB_MODE:-}"
+# Same shape check the /mode command applies, for the same reason: the value is
+# passed straight to the backend CLI.
+[[ -z "$WABOX_JOB_MODE" || "$WABOX_JOB_MODE" =~ ^[A-Za-z][A-Za-z0-9_-]{0,31}$ ]] || WABOX_JOB_MODE=""
 # Guardrails, because the agent can create jobs too (it shells out to
 # `wabox-bot job add`): a per-conversation cap, and a floor under /every so a
 # stray `/every 1s` can't hammer the backend forever.
@@ -197,6 +207,7 @@ CONFIG_VARS=(
   WABOX_BOT_UPDATE_CHECK WABOX_BOT_UPDATE_NET_TIMEOUT WABOX_DOC_MAX_MB
   WABOX_FW_COMPUTE WABOX_FW_DEVICE WABOX_FW_MODEL
   WABOX_INBOX WABOX_JOB_CATCHUP WABOX_JOB_MAX WABOX_JOB_MIN_INTERVAL
+  WABOX_JOB_MODE
   WABOX_JOB_TICK WABOX_JOB_TZ WABOX_MEDIA_DIR WABOX_MEDIA_KEEP_DAYS
   WABOX_OPENAI_WHISPER_MODEL WABOX_OUTBOX WABOX_PROCESSED_KEEP_DAYS
   WABOX_QUOTE_REPLY WABOX_SEND_DIR WABOX_SEND_KEEP_DAYS

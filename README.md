@@ -456,6 +456,15 @@ in the conversation that registered it.
   re-resolve their wall-clock time after every run, so they hold their hour
   across a DST change instead of drifting by one.
 
+**Permissions in a scheduled turn.** A job runs unattended, so a tool that isn't
+pre-allowed doesn't merely delay it: the yes/no is delivered *instead of* the
+reminder. Set `WABOX_JOB_MODE` (e.g. `bypassPermissions`) to give scheduled turns
+their own permission mode while the conversation itself stays on `default` — a
+job's text was written by you at registration and can't be changed later, which
+is a materially smaller surface than the live chat. Two related guarantees: a job
+never fires while a permission is parked (it would clobber the parked turn), and
+a job's own prompt is never mistaken for your "sim"/"não".
+
 **After downtime**, a one-shot fires however late it is (and says so); a
 recurring job whose slot is older than `WABOX_JOB_CATCHUP` (default 1h) skips
 that occurrence, so a laptop asleep overnight doesn't wake to eight backed-up

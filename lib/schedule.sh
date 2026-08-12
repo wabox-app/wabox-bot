@@ -449,6 +449,17 @@ sched_fire() {
     return 0
   fi
 
+  # Never fire into a parked permission. The conversation is waiting on the
+  # user, and a turn now would either clobber that parked state or stack a
+  # second question on top of it. Optional hook: backends without permission
+  # gating don't define it.
+  if declare -F backend_turn_parked >/dev/null && backend_turn_parked "$slug"; then
+    log_info "job[$slug#$id] holding: the conversation is waiting on a permission"
+    sched_defer "$file" "$now" "a permission is parked"
+    exec 6>&-
+    return 0
+  fi
+
   local body
   if [[ "$(jq -r '.raw // false' "$file")" == true ]]; then
     body="$text"
@@ -461,13 +472,29 @@ sched_fire() {
   if [[ "$action" == send ]]; then
     send_main "$slug" "$body" >/dev/null || rc=$?
   else
-    prompt_main "$slug" "$body" >/dev/null || rc=$?
+    # WABOX_JOB_MODE, when set, overrides the conversation's /mode for this turn
+    # only — a job runs unattended, so a tool that parks a yes/no doesn't delay
+    # it, it replaces the reminder. Empty ⇒ prompt_main sees nothing and the
+    # conversation's own mode applies, which is the old behaviour.
+    WABOX_TURN_MODE="${WABOX_JOB_MODE:-}" prompt_main "$slug" "$body" >/dev/null || rc=$?
   fi
 
   case "$rc" in
-    0 | 5)
-      # 5 is the NOOP sentinel — the agent looked and had nothing to say. That
-      # is a completed run, not a failure.
+    5)
+      # The NOOP sentinel — nothing was delivered. For a recurring check that is
+      # the feature (a quiet heartbeat stays quiet) and counts as a run. For a
+      # one-shot it means the reminder was silently thrown away: the wrapper
+      # tells it not to reply NOOP, but if it does anyway, deleting the job is
+      # the worst possible outcome. Defer instead, loudly, and let the usual
+      # catch-up window bound the retries.
+      if [[ "$kind" == once ]]; then
+        log_warn "job[$slug#$id] one-shot replied ${WABOX_PROMPT_NOOP:-NOOP} — nothing delivered; retrying"
+        sched_defer "$file" "$now" "the reminder was suppressed"
+      else
+        sched_advance "$file" "$now" 1
+      fi
+      ;;
+    0)
       sched_advance "$file" "$now" 1
       ;;
     3)

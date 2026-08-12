@@ -79,6 +79,7 @@ WABOX_JOB_TICK="${WABOX_JOB_TICK:-20}"                   # seconds between due-j
 # Grace for a run whose slot already passed (downtime, or the chat stayed busy):
 # a recurring job older than this skips the occurrence, a one-shot always fires.
 WABOX_JOB_CATCHUP="${WABOX_JOB_CATCHUP:-3600}"
+WABOX_JOB_MODE="${WABOX_JOB_MODE:-}"                      # permission mode for scheduled turns; empty = same as the conversation
 WABOX_JOB_MAX="${WABOX_JOB_MAX:-50}"                     # jobs per conversation
 WABOX_JOB_MIN_INTERVAL="${WABOX_JOB_MIN_INTERVAL:-60}"   # floor under /every
 

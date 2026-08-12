@@ -288,8 +288,12 @@ cc_run_turn() {
   if [[ -n "$model_override" ]]; then
     cmd+=(--model "$model_override")
   fi
-  local mode_override
-  mode_override="$(cc_mode_for "$slug" || true)"
+  # A scheduled turn may ask for its own permission mode (WABOX_JOB_MODE →
+  # WABOX_TURN_MODE): it runs unattended, so a parked yes/no doesn't delay it,
+  # it *replaces* the reminder and spends the occurrence. Config validates the
+  # shape; it goes straight to --permission-mode.
+  local mode_override="${WABOX_TURN_MODE:-}"
+  [[ -n "$mode_override" ]] || mode_override="$(cc_mode_for "$slug" || true)"
   if [[ -n "$mode_override" ]]; then
     # Comes after CLAUDE_ARGS so it overrides any --permission-mode there.
     cmd+=(--permission-mode "$mode_override")
@@ -458,7 +462,7 @@ backend_reply() {
   # If we parked a permission request on the previous turn, this message is the
   # user's answer to it — not a fresh prompt. (Expired pendings are cleared by
   # cc_has_pending_permission and fall through to the normal path below.)
-  if cc_has_pending_permission "$slug"; then
+  if [[ "${WABOX_TURN_SYNTHETIC:-}" != "1" ]] && cc_has_pending_permission "$slug"; then
     # A parked yes/no is answered with *text*. If the user instead sends media,
     # it cannot be the answer — treating it as one would swallow the image (the
     # exact bug batching exists to kill). Take it as the user having moved on:
@@ -609,6 +613,13 @@ schedule_every, schedule_daily, list_jobs, cancel_job) instead of you typing
 /in, /at, /every, /daily."
   fi
   printf '%s' "$out"
+}
+
+# Optional contract hook: is this conversation waiting on a parked yes/no?
+# The scheduler asks before firing — a job that runs now would either clobber
+# the parked turn or add a second question nobody asked for.
+backend_turn_parked() {
+  cc_has_pending_permission "$1"
 }
 
 backend_help() {

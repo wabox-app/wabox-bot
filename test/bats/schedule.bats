@@ -706,3 +706,69 @@ tick_now() { SCHED_LAST_TICK=0; sched_tick; wait; }
   [[ "$out" == *"/remind"* ]]
   teardown_lib
 }
+
+# ---- not consuming an occurrence that delivered nothing ----------------------
+
+@test "a one-shot that replies NOOP is retried, not deleted" {
+  setup_sched
+  # NOOP on a one-shot means the reminder was thrown away. Deleting the job then
+  # loses it forever, which is the worst outcome this feature can produce.
+  stub_prompt 5
+  cmd_reply "/in 1h call the dentist" >/dev/null
+  set_due 1 -5
+  tick_now
+  [ -f "$(job_file 1)" ]
+  [ "$(job_field 1 .runs)" -eq 0 ]
+  [ "$(job_field 1 .deferred_since)" -gt 0 ]
+  teardown_lib
+}
+
+@test "a recurring job replying NOOP still counts as a completed run" {
+  setup_sched
+  stub_prompt 5
+  cmd_reply "/every 30m check the calendar" >/dev/null
+  set_due 1 -5
+  tick_now
+  [ "$(job_field 1 .runs)" -eq 1 ]
+  [ "$(job_field 1 .next_run)" -gt "$(date +%s)" ]
+  teardown_lib
+}
+
+@test "a job holds while the conversation is waiting on a parked permission" {
+  setup_sched
+  stub_prompt 0
+  backend_turn_parked() { return 0; }
+  cmd_reply "/in 1h call the dentist" >/dev/null
+  set_due 1 -5
+  tick_now
+  # Firing now would clobber the parked turn or stack a second question.
+  [ "$(fired_count)" -eq 0 ]
+  [ -f "$(job_file 1)" ]
+  [ "$(job_field 1 .deferred_since)" -gt 0 ]
+  # Once the permission clears, the held occurrence runs.
+  backend_turn_parked() { return 1; }
+  tick_now
+  [ "$(fired_count)" -eq 1 ]
+  [ ! -f "$(job_file 1)" ]
+  teardown_lib
+}
+
+@test "WABOX_JOB_MODE reaches the turn, and is absent when unset" {
+  setup_sched
+  # Record the mode the fire hands down, rather than the whole turn.
+  # `-` not `:-`, so an empty value is distinguishable from an unset one: empty
+  # is what makes cc_run_turn fall back to the conversation's own /mode.
+  prompt_main() { printf '%s\n' "mode=[${WABOX_TURN_MODE-UNSET}]" >>"$STUB_LOG"; return 0; }
+  STUB_LOG="$TMPDIR_TEST/fired.log"; : >"$STUB_LOG"
+  cmd_reply "/in 1h a" >/dev/null
+  set_due 1 -5
+  tick_now
+  grep -qx "mode=\[\]" "$STUB_LOG"
+  export WABOX_JOB_MODE=bypassPermissions
+  # The first job was a spent one-shot, so this one is #1 again.
+  cmd_reply "/in 1h b" >/dev/null
+  set_due 1 -5
+  tick_now
+  grep -qx "mode=\[bypassPermissions\]" "$STUB_LOG"
+  teardown_lib
+}

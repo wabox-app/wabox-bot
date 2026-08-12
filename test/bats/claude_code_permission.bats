@@ -158,3 +158,32 @@ teardown() {
   [[ "$output" == *"pending:"* ]]
   [[ "$output" == *"sim"* ]]
 }
+
+# ---- a synthetic turn is never an answer ------------------------------------
+
+@test "a synthetic turn is not read as the answer to a parked permission" {
+  # The bug this guards: backend_reply used to treat ANY text as the yes/no.
+  # A scheduled job firing while a permission was parked therefore handed its
+  # own preamble to cc_handle_permission_response — the job was lost *and* the
+  # permission was resolved with garbage.
+  cc_save_pending_permission "$SLUG" "write the file" "$DENIALS" "$(date +%s)"
+  cc_handle_permission_response() { printf 'ANSWER-PATH\n'; return 0; }
+  cc_run_turn() { printf '%s' '{"result":"FRESH-TURN","session_id":"s1","permission_denials":[]}'; }
+  mkdir -p "$SESSIONS_DIR/$SLUG"
+
+  out="$(WABOX_TURN_SYNTHETIC=1 backend_reply "$SLUG" "5511@s.whatsapp.net" "stem" <<<"[wabox-bot scheduler — job #3] do the check")"
+  [ "$out" = "FRESH-TURN" ]
+  # …and the parked permission is still there for the user to actually answer.
+  run cc_has_pending_permission "$SLUG"
+  [ "$status" -eq 0 ]
+}
+
+@test "a real inbound message still answers a parked permission" {
+  cc_save_pending_permission "$SLUG" "write the file" "$DENIALS" "$(date +%s)"
+  cc_handle_permission_response() { printf 'ANSWER-PATH\n'; return 0; }
+  cc_run_turn() { printf '%s' '{"result":"FRESH-TURN","session_id":"s1","permission_denials":[]}'; }
+  mkdir -p "$SESSIONS_DIR/$SLUG"
+
+  out="$(backend_reply "$SLUG" "5511@s.whatsapp.net" "stem" <<<"sim")"
+  [ "$out" = "ANSWER-PATH" ]
+}

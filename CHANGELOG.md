@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A scheduled turn could be swallowed as the answer to a parked permission.**
+  `backend_reply` treated *any* text as the yes/no when a permission was waiting,
+  so a job firing in that window handed its own preamble to the answer path: the
+  job was lost and the permission was resolved with garbage. Turns raised by
+  `prompt_main` (scheduled jobs, `wabox-bot prompt`, cron heartbeats) are now
+  marked synthetic and never take that path, and the scheduler holds a job
+  entirely while a permission is parked (new optional backend hook
+  `backend_turn_parked`) rather than firing into it.
+- **A one-shot that replied `NOOP` was deleted without delivering anything.** The
+  wrapper tells it not to, but if it did, the reminder was gone for good. It now
+  defers and retries within the usual catch-up window, and logs a warning.
+  Recurring jobs are unchanged — a quiet heartbeat staying quiet is the feature.
+
+### Added
+
+- **`WABOX_JOB_MODE`** — permission mode for scheduled turns, overriding the
+  conversation's `/mode` for that turn only. A job runs unattended, so a
+  permission prompt doesn't delay it, it replaces the reminder; but putting the
+  whole conversation in `bypassPermissions` would hand full permissions to every
+  inbound WhatsApp message. A job's text is fixed by the user at registration,
+  which is the smaller surface. Empty (default) keeps the old behaviour.
+
 ## [0.17.0] - 2026-08-11
 
 ### Added
