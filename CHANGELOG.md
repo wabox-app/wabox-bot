@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-08-11
+
 ### Added
 
 - **Per-conversation timezone: `/tz`.** `/tz America/Sao_Paulo` sets it, `/tz`
@@ -513,7 +515,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `install.sh` one-liner: clones to `~/.local/share/wabox-bot`, symlinks
   `bin/wabox-bot` into `~/.local/bin/`.
 
-[Unreleased]: https://github.com/wabox-app/wabox-bot/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/wabox-app/wabox-bot/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/wabox-app/wabox-bot/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/wabox-app/wabox-bot/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/wabox-app/wabox-bot/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/wabox-app/wabox-bot/compare/v0.13.0...v0.14.0
