@@ -54,6 +54,8 @@ load_core() {
   source "$LIB_DIR/lastmsg.sh"
   # shellcheck source=lib/workdir.sh
   source "$LIB_DIR/workdir.sh"
+  # shellcheck source=lib/tz.sh
+  source "$LIB_DIR/tz.sh"
   # shellcheck source=lib/senddir.sh
   source "$LIB_DIR/senddir.sh"
   # shellcheck source=lib/media.sh

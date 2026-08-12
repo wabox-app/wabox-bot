@@ -14,7 +14,7 @@ run_main_loop() {
   log_info "  state     = $STATE_DIR"
   log_info "  processed = $PROCESSED_DIR$([[ $KEEP_PROCESSED == 1 ]] && echo "" || echo " (deleted after reply)")"
   log_info "  groupMode = $([[ $GROUP_PER_PARTICIPANT == 1 ]] && echo per-participant || echo per-chat)"
-  log_info "  jobs      = $STATE_DIR/jobs (tick ${WABOX_JOB_TICK}s, zone $(sched_tz_label))"
+  log_info "  jobs      = $STATE_DIR/jobs (tick ${WABOX_JOB_TICK}s, zone $(tz_label))"
 
   if [[ ! -d "$WABOX_INBOX" ]]; then
     log_error "inbox directory does not exist: $WABOX_INBOX"

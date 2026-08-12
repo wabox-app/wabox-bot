@@ -372,6 +372,39 @@ See [`examples/heartbeat/`](examples/heartbeat/) for the cron and systemd
 walkthrough — still the right tool for a *machine-level* job (one that should run
 whether or not the daemon is up, or that isn't tied to one conversation).
 
+## Timezone
+
+The daemon usually runs under systemd with a stripped environment, so its clock
+is UTC while you are not. Set your zone from the chat:
+
+```
+/tz                     show the current zone and your local time
+/tz America/Sao_Paulo   set it
+/tz default             follow the daemon again
+```
+
+It is per conversation (stored next to the `/cwd` override), so two people in
+different zones can share one daemon. Resolution order is **conversation >
+`WABOX_JOB_TZ` > the daemon's local time**.
+
+It feeds two things, and the second is easy to forget:
+
+- **the scheduler** — `/daily 09:00` means 09:00 *your* time;
+- **the agent's own clock** — the turn runs with `TZ` set, so "amanhã", "hoje à
+  noite" and any `date` it runs are computed in your zone rather than the
+  daemon's. Without this, "remind me tomorrow morning" is already wrong before
+  the scheduler sees it. The zone and your current local time also go into the
+  system prompt, because `date` is a permission-gated tool call.
+
+Two deliberate refusals: an unknown zone is rejected rather than accepted
+(`TZ=Foo/Bar` silently means UTC — the exact failure this is meant to prevent),
+and a bare offset like `-03` is turned down with a pointer to the city name
+(tzdata's `Etc/GMT+3` is UTC−3, sign inverted, and an offset can't follow
+daylight saving).
+
+Jobs freeze their zone when they're created, so changing `/tz` never moves a
+reminder that's already booked — the reply tells you how many kept the old zone.
+
 ## Scheduled jobs
 
 For anything tied to a conversation, don't touch a crontab: ask for it in the

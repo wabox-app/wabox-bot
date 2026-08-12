@@ -79,6 +79,11 @@ Module map:
 - **backend.sh** — resolves the backend, sources `lib/backends/<name>.sh`, validates
   the contract, and provides `backend_state_dir`.
 - **migrate.sh** — idempotent in-STATE_DIR migrations from the old flat layout.
+- **tz.sh** — per-conversation timezone (`/tz`), stored beside the `/cwd`
+  override. `conversation_tz` resolves conversation > `WABOX_JOB_TZ` > daemon
+  local; the claude-code backend exports it into the turn so the *agent's* clock
+  is the user's, not the daemon's. An unknown zone is refused because
+  `TZ=Foo/Bar` silently means UTC.
 - **commands.sh** — core slash-command dispatcher.
 - **mcp.sh** — `wabox-bot mcp <slug>`: the scheduler as a stdio MCP server, one
   process per conversation. Every tool is a slash command run through `cmd_main`.

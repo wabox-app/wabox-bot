@@ -133,16 +133,6 @@ sched_human_dur() {
   fi
 }
 
-# The zone label shown in /jobs, so a daemon started with a stripped TZ reads as
-# "09:00 UTC" in the listing instead of surfacing as a 6am message months later.
-sched_tz_label() {
-  if [[ -n "${WABOX_JOB_TZ:-}" ]]; then
-    printf '%s' "$WABOX_JOB_TZ"
-  else
-    date +%Z
-  fi
-}
-
 # sched_when_label <tz> <epoch> — "today 14:30" / "tomorrow 09:00" / "Sat 12/08 09:00"
 sched_when_label() {
   local tz="$1" epoch="$2" today tomorrow day
@@ -223,7 +213,7 @@ sched_add() {
       --argjson id "$new_id" \
       --arg kind "$kind" --arg rule "$rule" --arg spec "$spec" \
       --arg action "$action" --arg text "$text" \
-      --arg tz "${WABOX_JOB_TZ:-}" \
+      --arg tz "$(conversation_tz "$slug")" \
       --argjson next_run "$next_run" \
       --argjson created "$(date +%s)" \
       --argjson raw "$raw" \
@@ -559,7 +549,7 @@ sched_render_list() {
     return 0
   fi
   printf 'Scheduled jobs (%s):\n%s\n\n/cancel <n> removes one, /cancel all removes them all.' \
-    "$(sched_tz_label)" "$(sched_render_rows "$jobs")"
+    "$(tz_label "$slug")" "$(sched_render_rows "$jobs")"
 }
 
 # The conversation's jobs as a system-prompt fragment; prints nothing when it has
@@ -576,7 +566,7 @@ sched_context_lines() {
   [[ "$(jq -r 'length' <<<"$jobs")" != 0 ]] || return 0
   cat <<EOF
 Scheduled jobs registered in this WhatsApp conversation (wabox-bot's own
-scheduler; times in $(sched_tz_label)):
+scheduler; times in $(tz_label "$slug")):
 $(sched_render_rows "$jobs" '  ')
 When one comes due the daemon hands it to you as a turn tagged
 "[wabox-bot scheduler — job #N ...]". Those are real and expected: the user
@@ -605,7 +595,8 @@ sched_split() {
 # a job is addressed by slug, and the reply goes to `to` like any other command.)
 sched_handle_command() {
   local cmd_word="$1" cmd_args="$2" slug="$3" to="$5" msg_id="$6" stem="$7"
-  local tz="${WABOX_JOB_TZ:-}" now reply_path
+  local tz now reply_path
+  tz="$(conversation_tz "$slug")"
   now="$(date +%s)"
 
   case "$cmd_word" in
@@ -796,9 +787,9 @@ $usage" "$msg_id" "$stem")"
 
   local confirm
   if [[ "$kind" == once ]]; then
-    confirm="Got it — #$new_id, $(sched_when_label "$tz" "$next_run") ($(sched_tz_label))."
+    confirm="Got it — #$new_id, $(sched_when_label "$tz" "$next_run") ($(tz_label "$slug"))."
   else
-    confirm="Got it — #$new_id, $spec, first run $(sched_when_label "$tz" "$next_run") ($(sched_tz_label))."
+    confirm="Got it — #$new_id, $spec, first run $(sched_when_label "$tz" "$next_run") ($(tz_label "$slug"))."
   fi
   [[ "$job_action" == send ]] && confirm+=" I'll send exactly that text — no agent turn."
   reply_path="$(write_outbox "$to" "$confirm" "$msg_id" "$stem")"

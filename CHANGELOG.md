@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Per-conversation timezone: `/tz`.** `/tz America/Sao_Paulo` sets it, `/tz`
+  shows it with your current local time, `/tz default` reverts. Stored as core
+  per-conversation state beside the `/cwd` override, resolving
+  **conversation > `WABOX_JOB_TZ` > the daemon's local time**, so one daemon can
+  serve people in different zones without a config edit or a restart. New module
+  `lib/tz.sh`; the zone shows up in `/status`, `/jobs` and the system prompt.
+  - It also fixes the half of the problem that was never about the scheduler:
+    the `claude-code` turn now runs with `TZ` set, so the agent's own "now",
+    "amanhã" and any `date` it runs are the user's local ones. Previously a
+    daemon under systemd gave the agent a UTC clock, so "remind me tomorrow
+    morning" was wrong before the scheduler was involved.
+  - An unknown zone is refused rather than accepted, because `TZ=Foo/Bar`
+    silently means UTC. A bare offset (`-03`, `GMT-3`) is refused with a pointer
+    to the city name: tzdata's `Etc/GMT+3` is UTC−3, sign inverted, and an
+    offset cannot follow daylight saving.
+  - Existing jobs keep the zone they were created with — a setting change must
+    not move a reminder that is already booked — and the reply says how many did.
+
 - **`/remind` — a scheduled *message*, not a scheduled turn.** `/remind 22:00
   tomar o remédio`, `/remind every 2h beber água`, `/remind daily 09:00 bom dia`.
   One command folding the grammar of all four scheduling verbs (a delay, a clock

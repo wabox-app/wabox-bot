@@ -246,8 +246,9 @@ cc_compose_prompt() {
 cc_run_turn() {
   local slug="$1" conv_key="$2" stem="$3" workdir="$4" prompt="$5" extra_allowed="${6:-}"
 
-  local sid_existing sid
+  local sid_existing sid conv_tz
   sid_existing="$(cc_resumable_session "$slug" "$workdir" || true)"
+  conv_tz="$(conversation_tz "$slug")"
 
   local -a cmd=("$CLAUDE_BIN")
   # shellcheck disable=SC2206 # intentional word-splitting of CLAUDE_ARGS
@@ -262,6 +263,13 @@ cc_run_turn() {
   if [[ "$CC_ADVERTISE_SEND_DIR" == "1" ]]; then
     cmd+=(--append-system-prompt \
       "To send the user a file over WhatsApp, write it to $(senddir_path "$workdir")/ — any file you leave in that folder is attached to your reply and delivered.")
+  fi
+  # State the zone as well as running in it: `date` is a permission-gated Bash
+  # call, so an agent that can't get it approved would otherwise have no way to
+  # know what time it is for the person it's talking to.
+  if [[ -n "$conv_tz" ]]; then
+    cmd+=(--append-system-prompt \
+      "The user's timezone is $conv_tz, and this turn runs in it — your clock, dates and \"today\"/\"tomorrow\" are already the user's local ones. It is $(TZ="$conv_tz" date '+%A %Y-%m-%d %H:%M %Z') for them right now.")
   fi
   # This conversation's scheduled jobs, so a fired turn can be checked against a
   # list instead of taken on faith — registration happens in a slash command that
@@ -307,9 +315,19 @@ cc_run_turn() {
     log_info "[$stem] conv=$conv_key new session=$sid"
   fi
 
+  # Run the turn in the *user's* zone, not the daemon's. Under systemd the
+  # daemon's clock is usually UTC, so without this the agent's own sense of
+  # "now", "amanhã" and "hoje à noite" — and any date(1) it runs — is off by the
+  # user's offset before the scheduler is even involved. Empty ⇒ no TZ at all,
+  # since TZ="" means UTC rather than "inherit".
+  local -a runner=(timeout --kill-after=5 "$CLAUDE_TIMEOUT")
+  if [[ -n "$conv_tz" ]]; then
+    runner=(env "TZ=$conv_tz" "${runner[@]}")
+  fi
+
   local response_json rc=0
   response_json="$(printf '%s' "$prompt" |
-    timeout --kill-after=5 "$CLAUDE_TIMEOUT" "${cmd[@]}" 2>>"$LOG_FILE")" || rc=$?
+    "${runner[@]}" "${cmd[@]}" 2>>"$LOG_FILE")" || rc=$?
   if ((rc != 0)); then
     return "$rc"
   fi
