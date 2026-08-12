@@ -619,3 +619,90 @@ tick_now() { SCHED_LAST_TICK=0; sched_tick; wait; }
   [ "$status" -eq 0 ]
   teardown_lib
 }
+
+# ---- /remind: a message, not a turn -----------------------------------------
+
+@test "/remind records a send job that skips the wrapper" {
+  setup_sched
+  out="$(cmd_reply "/remind 22:00 tomar o remédio")"
+  [[ "$out" == *"exactly that text"* ]]
+  [ "$(job_field 1 .action)" = "send" ]
+  [ "$(job_field 1 .raw)" = "true" ]
+  [ "$(job_field 1 .kind)" = "once" ]
+  [ "$(job_field 1 .text)" = "tomar o remédio" ]
+  teardown_lib
+}
+
+@test "/remind takes durations, dates and the recurring forms" {
+  setup_sched
+  cmd_reply "/remind 2h tirar o frango" >/dev/null
+  [ "$(job_field 1 .kind)" = "once" ]
+  cmd_reply "/remind every 2h beber água" >/dev/null
+  [ "$(job_field 2 .kind)" = "interval" ]
+  [ "$(job_field 2 .rule)" = "7200" ]
+  [ "$(job_field 2 .action)" = "send" ]
+  cmd_reply "/remind daily 09:00 bom dia" >/dev/null
+  [ "$(job_field 3 .kind)" = "daily" ]
+  [ "$(job_field 3 .rule)" = "09:00" ]
+  cmd_reply "/remind 2026-08-12 09:00 renovar o passaporte" >/dev/null
+  [ "$(job_field 4 .kind)" = "once" ]
+  [ "$(job_field 4 .text)" = "renovar o passaporte" ]
+  teardown_lib
+}
+
+@test "/jobs marks a message job so it can't be mistaken for a standing prompt" {
+  setup_sched
+  cmd_reply "/remind daily 09:00 bom dia" >/dev/null
+  out="$(cmd_reply "/jobs")"
+  [[ "$out" == *"daily 09:00 (message)"* ]]
+  teardown_lib
+}
+
+@test "a send job delivers its text verbatim, with no agent turn" {
+  setup_sched
+  stub_prompt 0
+  # send_main writes straight to the outbox; capture what lands there.
+  cmd_reply "/remind 1h tomar o remédio" >/dev/null
+  set_due 1 -5
+  tick_now
+  # The stubbed prompt_main must NOT have been called at all.
+  [ "$(fired_count)" -eq 0 ]
+  found=""
+  for f in "$WABOX_OUTBOX"/*.json; do
+    [ "$(jq -r '.text' "$f")" = "tomar o remédio" ] && found=1
+  done
+  [ -n "$found" ]
+  # No wrapper leaked into the delivered message.
+  for f in "$WABOX_OUTBOX"/*.json; do
+    ! grep -q "wabox-bot scheduler" "$f"
+  done
+  [ ! -f "$(job_file 1)" ]
+  teardown_lib
+}
+
+@test "a recurring send job advances like any other" {
+  setup_sched
+  cmd_reply "/remind every 30m beber água" >/dev/null
+  set_due 1 -5
+  tick_now
+  [ "$(job_field 1 .runs)" -eq 1 ]
+  [ "$(job_field 1 .next_run)" -gt "$(date +%s)" ]
+  teardown_lib
+}
+
+@test "/remind still refuses junk and an empty body" {
+  setup_sched
+  out="$(cmd_reply "/remind quinta que vem comprar pão")"
+  [[ "$out" == *"couldn't read"* ]]
+  out="$(cmd_reply "/remind 2h")"
+  [[ "$out" == *"Schedule what?"* ]]
+  [ ! -f "$(job_file 1)" ]
+  teardown_lib
+}
+
+@test "/help lists /remind" {
+  setup_sched
+  out="$(cmd_reply "/help")"
+  [[ "$out" == *"/remind"* ]]
+  teardown_lib
+}

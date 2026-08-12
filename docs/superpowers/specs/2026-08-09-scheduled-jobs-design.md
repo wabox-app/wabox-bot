@@ -115,12 +115,26 @@ with no new CLI verb: because the commands are core, `wabox-bot cmd <slug>
   `wabox-bot cmd <slug> "/daily 09:00 …"` for free. A `job add` verb would have
   been a second parser for the same grammar.
 
+- **`/remind` is the send-mode twin of the four verbs** (added later; see the
+  `action`/`raw` note below, which anticipated it). It folds their whole grammar
+  into one command — a duration means `/in`, anything else means `/at`, and a
+  leading `every`/`daily` picks the recurring form — then writes
+  `action:"send"`, `raw:true`. Rewriting `cmd_word` and falling through to the
+  existing parser keeps one grammar and one set of error messages. `spec` gets a
+  ` (message)` suffix so `/jobs` can't show a message job and a standing prompt
+  as the same thing. The point is determinism, not cost: a reminder whose
+  wording is already known must not be re-composed by a model that might reword
+  it, pad it, or `NOOP` it away.
+
 - **Records carry `action` and `raw`, but chat only ever writes
   `action:"prompt"`, `raw` absent.** `sched_fire` honours `action:"send"` (dumb
   delivery via `send_main`, no agent turn, no tokens) and `raw:true` (skip the
   wrapper), because a `/remind`-style command and a byte-exact scripted job are
   the obvious next asks and the runner support is a handful of lines. Nothing
-  in v1 produces them except a hand-written record.
+  in v1 produced them except a hand-written record; `/remind` (above) is that
+  next ask, arriving later and needing only a `raw` argument on `sched_add`.
+  `raw` is kept separate from `action` rather than implied by it, because a
+  byte-exact *prompt* remains a legitimate combination.
 
 - **Missed runs: one-shots always fire, recurring ones skip.** After downtime,
   a `once` job fires however late it is (a late reminder beats a lost one) and

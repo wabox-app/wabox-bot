@@ -68,11 +68,11 @@ INIT='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":
   teardown_lib
 }
 
-@test "tools/list advertises the six scheduler tools with input schemas" {
+@test "tools/list advertises the seven scheduler tools with input schemas" {
   setup_mcp
   out="$(rpc "$INIT" '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | tail -1)"
   names="$(jq -r '.result.tools[].name' <<<"$out" | sort | tr '\n' ' ')"
-  [ "$names" = "cancel_job list_jobs schedule_at schedule_daily schedule_every schedule_in " ]
+  [ "$names" = "cancel_job list_jobs schedule_at schedule_daily schedule_every schedule_in schedule_message " ]
   [ "$(jq -r '.result.tools[] | select(.name=="schedule_in") | .inputSchema.required | join(",")' <<<"$out")" = "delay,text" ]
   teardown_lib
 }
@@ -148,6 +148,20 @@ and the inbox" ]
   [ "$(jq -r 'select(.id==2) | .result.isError' <<<"$out")" = "false" ]
   [[ "$(jq -r 'select(.id==2) | .result.content[0].text' <<<"$out")" == *"couldn't read"* ]]
   [ ! -f "$JOBS_DIR/$SLUG/1.json" ]
+  teardown_lib
+}
+
+@test "schedule_message registers a verbatim send job, not an agent turn" {
+  setup_mcp
+  out="$(rpc "$INIT" \
+    '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"schedule_message","arguments":{"when":"22:00","text":"tomar o remédio"}}}' \
+    '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"schedule_message","arguments":{"when":"every 2h","text":"beber água"}}}')"
+  [ "$(jq -r 'select(.id==2) | .result.isError' <<<"$out")" = "false" ]
+  [ "$(jq -r '.action' "$JOBS_DIR/$SLUG/1.json")" = "send" ]
+  [ "$(jq -r '.raw' "$JOBS_DIR/$SLUG/1.json")" = "true" ]
+  [ "$(jq -r '.text' "$JOBS_DIR/$SLUG/1.json")" = "tomar o remédio" ]
+  [ "$(jq -r '.kind' "$JOBS_DIR/$SLUG/2.json")" = "interval" ]
+  [ "$(jq -r '.action' "$JOBS_DIR/$SLUG/2.json")" = "send" ]
   teardown_lib
 }
 

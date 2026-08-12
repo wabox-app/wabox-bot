@@ -80,6 +80,18 @@ mcp_tools_json() {
     }
   },
   {
+    "name": "schedule_message",
+    "description": "Schedule a message to be sent verbatim at a given time — no agent turn runs, so it costs nothing and arrives exactly as written. Prefer this over schedule_in/schedule_at whenever you already know the final wording now (\"take the pills\", \"leave for the airport\"): a reminder that only has to be repeated back should not be re-composed by a model that might reword it, pad it, or decide it isn't worth sending. Use schedule_in/schedule_at instead when the message depends on something that has to be looked up at the time.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "when": {"type": "string", "description": "A delay (2h, 30m, 1d), a time (22:00, 9am), a date and time (2026-08-12 09:00), or a repeat: \"every 2h\", \"daily 09:00\"."},
+        "text": {"type": "string", "description": "The exact message to send, in the user's language. It is delivered as written."}
+      },
+      "required": ["when", "text"]
+    }
+  },
+  {
     "name": "list_jobs",
     "description": "List every job scheduled in this conversation, with its id, rule, next run and text. Call this before cancelling, and to answer \"what have you got scheduled for me?\".",
     "inputSchema": {"type": "object", "properties": {}}
@@ -126,6 +138,11 @@ mcp_call_tool() {
       a="$(jq -r '.time // ""' <<<"$args_json")"
       b="$(jq -r '.text // ""' <<<"$args_json")"
       cmd_main "$slug" "/daily $a $b"
+      ;;
+    schedule_message)
+      a="$(jq -r '.when // ""' <<<"$args_json")"
+      b="$(jq -r '.text // ""' <<<"$args_json")"
+      cmd_main "$slug" "/remind $a $b"
       ;;
     list_jobs)
       cmd_main "$slug" "/jobs"

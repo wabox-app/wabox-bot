@@ -77,7 +77,7 @@ $fence" "$id" "$stem")"
       log_info "[$stem] /memory → $reply_path"
       return 0
       ;;
-    /in | /at | /every | /daily | /jobs | /cancel)
+    /in | /at | /every | /daily | /remind | /jobs | /cancel)
       # Scheduling lives in lib/schedule.sh; core owns these because nothing
       # about them is backend-specific (and `wabox-bot cmd` gets them for free).
       sched_handle_command "$cmd_word" "$cmd_args" "$slug" "$conv_key" "$to" "$id" "$stem"
@@ -117,6 +117,8 @@ update:  v$(cat -- "$STATE_DIR/update-available") available — send /update now
 /at 18:00 <what> remind me once, at a time (or /at 2026-08-12 09:00 …)
 /every 30m <what>  repeat on an interval
 /daily 09:00 <what>  repeat every day at that time
+/remind 22:00 <text> send exactly that text, no agent turn
+                 (also /remind every 2h … and /remind daily 09:00 …)
 /jobs            list this conversation's scheduled jobs
 /cancel <n>      cancel one (/cancel all for every one)
 /update          check for a newer wabox-bot release (/update now to apply)

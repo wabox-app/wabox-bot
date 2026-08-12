@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`/remind` — a scheduled *message*, not a scheduled turn.** `/remind 22:00
+  tomar o remédio`, `/remind every 2h beber água`, `/remind daily 09:00 bom dia`.
+  One command folding the grammar of all four scheduling verbs (a delay, a clock
+  time, a date, or an `every`/`daily` prefix), but the job fires through
+  `send_main` instead of `prompt_main`: the text is delivered exactly as written,
+  costing no tokens and no session growth, and it can never be reworded or
+  suppressed by a `NOOP`. Use it when the final wording is already known; the
+  turn-running verbs remain the answer when the message depends on something
+  that must be looked up at fire time. `/jobs` marks these `(message)`.
+  Exposed over MCP as `schedule_message`. This lights up the `action:"send"` +
+  `raw:true` path the job runner already carried but nothing produced;
+  `sched_add` gained a `raw` argument to write it.
+
 ## [0.16.0] - 2026-08-11
 
 ### Added

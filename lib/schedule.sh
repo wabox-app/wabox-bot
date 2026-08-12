@@ -200,6 +200,10 @@ sched_count() {
 # agent can create jobs too, and a loop of them would be expensive and silent).
 sched_add() {
   local slug="$1" kind="$2" rule="$3" spec="$4" action="$5" text="$6" next_run="$7"
+  # `raw` skips the wrapper at fire time. It travels with action="send" (a
+  # message the user reads must not carry the agent preamble) but is separate
+  # from it, because a byte-exact *prompt* is a legitimate combination too.
+  local raw="${8:-false}"
   local dir="$JOBS_DIR/$slug"
   mkdir -p "$dir"
 
@@ -222,8 +226,9 @@ sched_add() {
       --arg tz "${WABOX_JOB_TZ:-}" \
       --argjson next_run "$next_run" \
       --argjson created "$(date +%s)" \
+      --argjson raw "$raw" \
       '{id: $id, kind: $kind, rule: $rule, spec: $spec, action: $action,
-        text: $text, tz: $tz, next_run: $next_run, created: $created,
+        text: $text, tz: $tz, raw: $raw, next_run: $next_run, created: $created,
         last_run: 0, runs: 0, deferred_since: 0}' >"$tmp"
     mv "$tmp" "$dir/$new_id.json"
     printf '%s' "$new_id"
@@ -635,11 +640,47 @@ sched_handle_command() {
       return 0
       ;;
     /in | /at | /every | /daily) ;;
+    /remind) ;;
     *) return 99 ;;
   esac
 
   # ---- the four scheduling verbs ----
   local first rest kind rule spec next_run
+  # A job either runs a turn (the default) or just delivers its text. `raw`
+  # travels with send: the wrapper is instructions addressed to an agent, and
+  # delivering it to a human would be gibberish.
+  local job_action=prompt job_raw=false
+
+  # /remind is the send-mode twin of the four verbs above, with the same
+  # grammar folded into one command: an optional leading `every`/`daily` picks
+  # the recurring form, and otherwise a duration means /in and anything else
+  # means /at. Rewriting cmd_word here rather than duplicating the parsing keeps
+  # one grammar and one set of error messages.
+  if [[ "$cmd_word" == /remind ]]; then
+    job_action=send
+    job_raw=true
+    sched_split "$cmd_args"
+    case "$SCHED_FIRST" in
+      every)
+        cmd_word=/every
+        cmd_args="$SCHED_REST"
+        ;;
+      daily)
+        cmd_word=/daily
+        cmd_args="$SCHED_REST"
+        ;;
+      *)
+        # sched_parse_dur is the discriminator: it takes "2h" and "90" and
+        # rejects "18:00" / "9h30" / "2026-08-12", which is exactly /at's half.
+        if sched_parse_dur "$SCHED_FIRST" >/dev/null 2>&1; then
+          cmd_word=/in
+        else
+          cmd_word=/at
+        fi
+        ;;
+    esac
+  fi
+
   sched_split "$cmd_args"
   first="$SCHED_FIRST"
   rest="$SCHED_REST"
@@ -650,6 +691,8 @@ sched_handle_command() {
 /at 2026-08-12 09:00 …   once, on a date
 /every 30m <what>        repeating, on an interval
 /daily 09:00 <what>      repeating, at a wall-clock time
+/remind 22:00 <text>     same times, but sends that text verbatim — no agent
+                         turn (also /remind every 2h … and /remind daily 09:00 …)
 /jobs · /cancel <n>"
 
   case "$cmd_word" in
@@ -733,8 +776,12 @@ $usage" "$msg_id" "$stem")"
     return 0
   fi
 
+  # `spec` is the human echo in /jobs, so it has to say when a job won't be an
+  # agent turn — otherwise a message job and a standing prompt look identical.
+  [[ "$job_action" == send ]] && spec="$spec (message)"
+
   local new_id add_rc=0
-  new_id="$(sched_add "$slug" "$kind" "$rule" "$spec" prompt "$rest" "$next_run")" || add_rc=$?
+  new_id="$(sched_add "$slug" "$kind" "$rule" "$spec" "$job_action" "$rest" "$next_run" "$job_raw")" || add_rc=$?
   if ((add_rc == 2)); then
     reply_path="$(write_outbox "$to" \
       "This conversation already has $WABOX_JOB_MAX scheduled jobs — cancel one first (/jobs)." \
@@ -753,6 +800,7 @@ $usage" "$msg_id" "$stem")"
   else
     confirm="Got it — #$new_id, $spec, first run $(sched_when_label "$tz" "$next_run") ($(sched_tz_label))."
   fi
+  [[ "$job_action" == send ]] && confirm+=" I'll send exactly that text — no agent turn."
   reply_path="$(write_outbox "$to" "$confirm" "$msg_id" "$stem")"
   log_info "[$stem] $cmd_word → job #$new_id kind=$kind next_run=$next_run → $reply_path"
   return 0

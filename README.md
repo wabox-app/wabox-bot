@@ -21,8 +21,10 @@ takes care of:
   `/update`, plus backend-owned ones like `/model`, `/mode`, `/system` for the
   Claude Code backend).
 - **Scheduled jobs** — ask for a reminder or a standing check from the chat
-  itself: `/in 2h …`, `/at 18:00 …`, `/every 30m …`, `/daily 09:00 …`, then
-  `/jobs` and `/cancel <n>`. See **Scheduled jobs** below.
+  itself: `/in 2h …`, `/at 18:00 …`, `/every 30m …`, `/daily 09:00 …`, or
+  `/remind 22:00 …` for a message sent verbatim with no agent turn; then `/jobs`
+  and `/cancel <n>`. The agent can schedule for you too, via `/mcp add`. See
+  **Scheduled jobs** below.
 - **Per-conversation working folder** — each conversation's agent runs in its
   own directory (auto `$STATE_DIR/work/<slug>` by default), so file operations
   stay isolated. Redirect one with `/cwd <path>` (e.g. `/cwd ~/Valter`);
@@ -395,6 +397,15 @@ in the conversation that registered it.
   nobody is waiting and that it should reply `NOOP` unless something genuinely
   needs you, so a quiet check sends nothing. A one-shot gets the opposite
   instruction — a reminder must never be suppressed.
+- **`/remind` sends a message instead of running a turn.** `/remind 22:00 tomar
+  o remédio`, `/remind every 2h beber água`, `/remind daily 09:00 bom dia` — same
+  times as above (a delay, a clock time, a date, or an `every`/`daily` prefix),
+  but the job delivers that text **verbatim** when it fires: no agent turn, no
+  tokens, and no chance of the wording being re-composed or of a recurring job
+  deciding it has nothing to say. Use it whenever you already know the final
+  wording; use `/in`/`/at`/`/every`/`/daily` when the message depends on
+  something that has to be looked up at the time. `/jobs` marks these
+  `(message)`.
 - **The agent can see the schedule.** Every turn's system prompt carries this
   conversation's job list, and a fired job arrives tagged
   `[wabox-bot scheduler — job #N …]` with the time it was registered. Both matter:
@@ -442,8 +453,8 @@ agent needs the scheduler as a tool, which is what `/mcp add` sets up:
 It writes two files in the working folder and reports what it did:
 
 - `.mcp.json` — spawns `wabox-bot mcp <slug>`, a stdio MCP server exposing
-  `schedule_in`, `schedule_at`, `schedule_every`, `schedule_daily`, `list_jobs`
-  and `cancel_job`. The slug is baked into the spawn line, so the tools are
+  `schedule_in`, `schedule_at`, `schedule_every`, `schedule_daily`,
+  `schedule_message`, `list_jobs` and `cancel_job`. The slug is baked into the spawn line, so the tools are
   scoped to this conversation and the agent never has to know its own id.
 - `.claude/settings.local.json` — enables the server (`enabledMcpjsonServers`)
   and pre-allows its tools (`permissions.allow`). Both are required in headless
