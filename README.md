@@ -473,8 +473,11 @@ next tick rather than being dropped.
 
 `/clear` resets the session but deliberately leaves the schedule alone —
 forgetting the conversation is not cancelling a reminder. `wabox-bot rm <slug>`
-does remove its jobs. Knobs: `WABOX_JOB_TICK` (scan interval, 20s),
-`WABOX_JOB_MAX` (jobs per conversation, 50), `WABOX_JOB_MIN_INTERVAL` (floor
+does remove its jobs. Knobs: `WABOX_JOB_TICK` (scan interval, 20s — also the
+scheduler's resolution floor: nothing fires more precisely than one tick),
+`WABOX_JOB_MODE` (permission mode for scheduled turns, empty ⇒ the
+conversation's), `WABOX_JOB_MAX` (jobs per conversation, 50),
+`WABOX_JOB_MIN_INTERVAL` (floor
 under `/every`, 60s).
 
 Every one of these works through `wabox-bot cmd <slug> "/daily 09:00 …"` too, so
