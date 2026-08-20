@@ -644,7 +644,9 @@ tick_now() { SCHED_LAST_TICK=0; sched_tick; wait; }
   cmd_reply "/remind daily 09:00 bom dia" >/dev/null
   [ "$(job_field 3 .kind)" = "daily" ]
   [ "$(job_field 3 .rule)" = "09:00" ]
-  cmd_reply "/remind 2026-08-12 09:00 renovar o passaporte" >/dev/null
+  # Computed, never literal: a hard-coded date silently stops testing the date
+  # form the day it goes past, since the scheduler (rightly) refuses the past.
+  cmd_reply "/remind $(date -d '+1 year' +%F) 09:00 renovar o passaporte" >/dev/null
   [ "$(job_field 4 .kind)" = "once" ]
   [ "$(job_field 4 .text)" = "renovar o passaporte" ]
   teardown_lib
