@@ -336,6 +336,21 @@ cc_run_turn() {
     return "$rc"
   fi
 
+  # stdout must be the envelope and nothing else. Anything that prints ahead of
+  # it — a wrapper script standing in for $CLAUDE_BIN, a version manager's
+  # "using X" notice, a stray echo in a login profile — leaves every jq below
+  # parsing garbage, and each one swallows its own error, so a turn the model
+  # answered perfectly well reaches the user as "(no response)" with nothing in
+  # the log to explain it. Refuse it here instead, naming the binary that
+  # misbehaved and quoting what it actually said.
+  if ! jq -e type <<<"$response_json" >/dev/null 2>&1; then
+    local snippet resolved
+    snippet="$(printf '%.200s' "${response_json:-(nothing)}" | tr '\n' ' ')"
+    resolved="$(command -v "$CLAUDE_BIN" 2>/dev/null || printf '%s' "$CLAUDE_BIN")"
+    log_error "[$stem] non-JSON on stdout from $resolved: $snippet"
+    return 65
+  fi
+
   # Persist whatever session id Claude reports back (it may rotate).
   local sid_returned
   sid_returned="$(jq -r '.session_id // empty' <<<"$response_json" 2>/dev/null || true)"

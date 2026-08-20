@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Anything printed ahead of `claude`'s JSON silently emptied every reply.** The
+  turn's stdout was handed straight to `jq`, and each read swallowed its own
+  parse error, so one stray line — a wrapper script standing in for `$CLAUDE_BIN`,
+  a version manager's "using X" notice, an echo in a login profile — made
+  `.result`, `.session_id` *and* `.permission_denials` all come back empty. The
+  user got `(no response)` for a turn the model had answered in full, the session
+  id was never persisted, and the log said nothing. `cc_run_turn` now validates
+  that stdout parses as JSON, fails the turn with rc `65` (so the loop sends its
+  error line), and logs the offending output alongside the resolved path of the
+  binary that produced it.
+
 ## [0.18.0] - 2026-08-12
 
 ### Fixed
