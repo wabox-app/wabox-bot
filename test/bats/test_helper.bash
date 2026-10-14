@@ -74,4 +74,6 @@ load_core() {
   source "$LIB_DIR/commands.sh"
   # shellcheck source=lib/batch.sh
   source "$LIB_DIR/batch.sh"
+  # shellcheck source=lib/triage.sh
+  source "$LIB_DIR/triage.sh"
 }

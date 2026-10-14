@@ -311,6 +311,32 @@ handle_envelope() {
 
     log_info "[$b_stem] draining $b_count message(s) for conv=$conv_key → backend"
 
+    # Triage (lib/triage.sh): text-only turns only — media wants the full agent
+    # anyway — and never while a permission is parked, because then this text
+    # is the user's yes/no and a "sim" must reach the backend, not be skipped.
+    local tier=full turn_model=""
+    if triage_enabled && [[ "$b_media" == "[]" ]] &&
+      ! { declare -F backend_turn_parked >/dev/null && backend_turn_parked "$slug"; }; then
+      tier="$(triage_turn "$slug" "$b_stem" "$b_text")"
+    fi
+    if [[ "$tier" == "skip" ]]; then
+      # Seen, nothing to say: react instead of replying, so the user still gets
+      # a visible "got it" for the turn we didn't spend.
+      if [[ -n "$WABOX_TRIAGE_SKIP_REACT" && -n "$b_id" ]]; then
+        local skip_extras
+        skip_extras="$(jq -n \
+          --arg emoji "$WABOX_TRIAGE_SKIP_REACT" \
+          --arg mid "$b_id" \
+          --arg part "$b_part" \
+          '{react: ({emoji: $emoji, messageId: $mid}
+                    + (if $part == "" then {} else {participant: $part} end))}')"
+        write_outbox "$b_to" "" "" "${b_stem}-skip" "$skip_extras" >/dev/null
+      fi
+      log_info "[$b_stem] triage skipped the turn (no reply needed)"
+      exit 0
+    fi
+    [[ "$tier" == "light" ]] && turn_model="$WABOX_TRIAGE_LIGHT_MODEL"
+
     # Ack reaction (turn-in-progress signal): fired once, here, as the merged
     # turn starts — so it means "an agent turn is now running", reacting to the
     # newest message of the burst. It's a react-only job carrying that id (+
@@ -337,8 +363,12 @@ handle_envelope() {
     senddir_prune "$workdir"
 
     local reply rc=0
+    # WABOX_TURN_MODEL is the triage tier's model, scoped to this call (empty ⇒
+    # the backend's usual choice).
     reply="$(printf '%s' "$b_text" |
-      backend_reply "$slug" "$conv_key" "$b_stem" "$m1_path" "$m1_type" "$m1_mime" "$b_media")" || rc=$?
+      WABOX_TURN_MODEL="$turn_model" \
+        backend_reply "$slug" "$conv_key" "$b_stem" "$m1_path" "$m1_type" "$m1_mime" "$b_media")" || rc=$?
+    ((rc == 0)) && [[ -n "$reply" ]] && lastreply_write "$slug" "$reply"
 
     # Collect agent-produced files only on the success path — a failed or
     # timed-out turn's partial outputs stay in the folder and get archived at

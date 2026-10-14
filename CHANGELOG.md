@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Triage: spend less on turns that don't need the full agent.** With
+  `WABOX_TRIAGE=1` and a TypeSafe API key, each text-only turn is first
+  classified by Jev (a fast classifier that returns typed answers). A pure
+  acknowledgement gets a reaction (`WABOX_TRIAGE_SKIP_REACT`) instead of a turn,
+  small talk and quick facts run on `WABOX_TRIAGE_LIGHT_MODEL` (default `haiku`),
+  and everything else runs as before. Jev sees the bot's last reply alongside the
+  message, so "ok" after a question isn't mistaken for a sign-off. Media turns and
+  answers to a parked permission skip triage entirely. Any error, timeout, or
+  low-confidence answer falls back to a normal turn. A conversation's `/model`
+  always wins over the light model. Off by default; `curl` is needed only when
+  triage is on.
+- `WABOX_TURN_MODEL`: a per-turn model hint for backends. The claude-code
+  backend honors it when the conversation has no `/model`.
+
 ## [0.18.1] - 2026-08-20
 
 ### Fixed

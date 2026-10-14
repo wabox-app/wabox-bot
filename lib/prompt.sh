@@ -123,6 +123,7 @@ prompt_main() {
   out="$(write_outbox "$to" "$reply" "" "$stem" "$extras")"
   log_info "prompt[$slug] delivered reply → $out"
   lastmsg_write "$slug" out "$reply"
+  lastreply_write "$slug" "$reply"
   exec 8>&-
   return 0
 }

@@ -200,6 +200,11 @@ the backend — the reply contract stays "text on stdout". You get them for free
 
 - **Ack reaction** — when `WABOX_ACK_REACT` is set, the loop reacts to the
   inbound message the moment it hands off to your `backend_reply`. Nothing to do.
+- **Triage model hint:** when triage (README, "Triage") sends a turn down the
+  light tier, `backend_reply` runs with `WABOX_TURN_MODEL` set to the cheaper
+  model. Honor it if your backend can pick a model per turn, and let an explicit
+  per-conversation choice win over it. Ignoring it is fine; the turn just costs
+  what it did before.
 - **Quote-replies** — the loop decides whether to quote (see `WABOX_QUOTE_REPLY`)
   and computes `replyTo` itself. Nothing to do.
 - **Outgoing files** — any file that exists in

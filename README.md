@@ -98,6 +98,7 @@ restart the daemon afterward for the new code to take effect.
 - `jq`
 - `flock`, `timeout` (from `util-linux` / `coreutils`)
 - The agent CLI you're using as a backend (e.g. `claude` for the default backend)
+- `curl`, only if you turn on [triage](#triage-cost-control)
 - A running [wabox](https://github.com/rodgco/wabox) instance providing the
   inbox/outbox folders
 
@@ -167,6 +168,41 @@ OpenAI Whisper, Vosk, and any OpenAI-compatible API such as Groq) live in
 
 Backend-specific env vars (for example `CLAUDE_BIN`, `CLAUDE_ARGS`,
 `CLAUDE_TIMEOUT`) are documented in `docs/backends.md`.
+
+### Triage (cost control)
+
+Every text message normally costs a full agent turn. With triage on, wabox-bot
+first asks [Jev](https://docs.typesafe.ai/introduction) (TypeSafe's fast
+classifier, ~100 ms and a fraction of a cent per call) two questions about the
+message (and the bot's last reply, so "ok" after "Want me to delete it?" still
+counts as an answer). It then does one of three things:
+
+- **skip:** a pure acknowledgement ("valeu!", "👍") gets a reaction instead of a turn.
+- **light:** small talk and quick facts run on `WABOX_TRIAGE_LIGHT_MODEL`.
+- **full:** everything else runs as usual.
+
+Messages with media and replies to a pending permission prompt are never
+triaged. If triage fails for any reason (error, timeout, an answer it isn't
+sure about), the message gets a normal turn. A conversation's `/model` always
+overrides the light model. Each decision is logged (`triage → light {...}`), so
+you can tune the thresholds from `agent.log`.
+
+```bash
+wabox-bot config set WABOX_TRIAGE 1
+wabox-bot config set WABOX_TRIAGE_API_KEY '<key from console.typesafe.ai/keys>'
+```
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `WABOX_TRIAGE` | `0` | `1` ⇒ on. Needs a key; without one it logs a warning and stays off. |
+| `WABOX_TRIAGE_API_KEY` | (empty) | TypeSafe API key. Falls back to `TYPESAFE_API_KEY`. |
+| `WABOX_TRIAGE_LIGHT_MODEL` | `haiku` | Model for light turns (claude-code). Empty ⇒ no light tier. |
+| `WABOX_TRIAGE_MIN_CONFIDENCE` | `0.8` | A turn only goes light when Jev is at least this confident. |
+| `WABOX_TRIAGE_SKIP_BELOW` | `0.05` | Skip when P(needs a reply) is below this. `0` ⇒ never skip. |
+| `WABOX_TRIAGE_SKIP_REACT` | `👍` | Reaction sent in place of a skipped turn. Empty ⇒ skip silently. |
+| `WABOX_TRIAGE_TIMEOUT` | `3` | Seconds to wait for Jev before falling back to a full turn. |
+| `WABOX_TRIAGE_MODEL` | `jev-latest` | TypeSafe model id. |
+| `WABOX_TRIAGE_API_URL` | TypeSafe endpoint | Override for a proxy or a compatible endpoint. |
 
 ## Backends
 

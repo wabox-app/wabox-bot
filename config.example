@@ -42,6 +42,22 @@ WABOX_QUOTE_REPLY="${WABOX_QUOTE_REPLY:-auto}"
 # wait). Raise it on flaky connections where a burst dribbles in slowly.
 WABOX_BATCH_WINDOW="${WABOX_BATCH_WINDOW:-3}"
 
+# ── Triage (cost control) ─────────────────────────────────────────────────────
+# Before each text turn, ask Jev (TypeSafe's fast classifier, ~$0.0003/call)
+# whether it needs a reply and how much model it needs. A pure "ok"/"valeu" gets
+# a reaction instead of a turn; small talk and quick facts run on the light
+# model; everything else runs as usual. Any triage error ⇒ a normal turn.
+# A conversation's /model always wins over the light model. Off by default.
+WABOX_TRIAGE="${WABOX_TRIAGE:-0}"                         # 1 = on (needs a key)
+WABOX_TRIAGE_API_KEY="${WABOX_TRIAGE_API_KEY:-}"          # or TYPESAFE_API_KEY
+WABOX_TRIAGE_LIGHT_MODEL="${WABOX_TRIAGE_LIGHT_MODEL:-haiku}"  # empty = no light tier
+WABOX_TRIAGE_MIN_CONFIDENCE="${WABOX_TRIAGE_MIN_CONFIDENCE:-0.8}"  # light only above this
+WABOX_TRIAGE_SKIP_BELOW="${WABOX_TRIAGE_SKIP_BELOW:-0.05}"  # P(needs reply) to skip; 0 = never
+WABOX_TRIAGE_SKIP_REACT="${WABOX_TRIAGE_SKIP_REACT:-👍}"   # reaction on a skipped turn
+WABOX_TRIAGE_TIMEOUT="${WABOX_TRIAGE_TIMEOUT:-3}"         # seconds before falling back
+# WABOX_TRIAGE_MODEL="${WABOX_TRIAGE_MODEL:-jev-latest}"
+# WABOX_TRIAGE_API_URL="${WABOX_TRIAGE_API_URL:-https://api.typesafe.ai/v1/systemone}"
+
 # ── Memory & skills ───────────────────────────────────────────────────────────
 # A new *default* workdir (not a /cwd redirect) is seeded with an instructions
 # file teaching the agent WhatsApp etiquette (markup, chat-sized replies), the

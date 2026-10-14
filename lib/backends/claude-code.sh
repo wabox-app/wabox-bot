@@ -283,8 +283,13 @@ cc_run_turn() {
       cmd+=(--append-system-prompt "$jobs_ctx")
     fi
   fi
+  # A conversation's /model is the user's explicit choice and wins; the triage
+  # tier's WABOX_TURN_MODEL (a cheaper model for a light turn) only fills in
+  # when there is none. The inverse of WABOX_TURN_MODE's precedence on purpose:
+  # a job asks for a mode it *needs*, triage merely suggests a saving.
   local model_override
   model_override="$(cc_model_for "$slug" || true)"
+  [[ -n "$model_override" ]] || model_override="${WABOX_TURN_MODEL:-}"
   if [[ -n "$model_override" ]]; then
     cmd+=(--model "$model_override")
   fi

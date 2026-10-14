@@ -146,6 +146,7 @@ send_main() {
 
   # Only the slug path has a conversation to record against.
   [[ -n "$slug" ]] && lastmsg_write "$slug" out "$text"
+  [[ -n "$slug" ]] && lastreply_write "$slug" "$text"
   return 0
 }
 

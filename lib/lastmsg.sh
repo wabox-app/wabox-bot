@@ -26,3 +26,25 @@ lastmsg_write() {
     mv -f -- "$tmp" "$dir/last_message.json" 2>/dev/null || rm -f -- "$tmp"
   fi
 }
+
+# The tail of the bot's most recent reply, kept for triage (lib/triage.sh). A
+# bare "ok"/"sim" is only skippable when the bot didn't just ask something — so
+# the classifier needs to see what was said last, and a question sits at the
+# *end* of a reply, hence the tail rather than last_message's 120-char head.
+# Written by every path that delivers bot text (inbox drain, prompt, send).
+LASTREPLY_TAIL=600
+
+lastreply_write() {
+  local slug="$1" text="$2"
+  local dir="$SESSIONS_DIR/$slug"
+  mkdir -p "$dir"
+  ((${#text} > LASTREPLY_TAIL)) && text="${text: -LASTREPLY_TAIL}"
+  local tmp="$dir/.last_reply.tmp.$BASHPID.$RANDOM"
+  if printf '%s' "$text" >"$tmp" 2>/dev/null; then
+    mv -f -- "$tmp" "$dir/last_reply" 2>/dev/null || rm -f -- "$tmp"
+  fi
+}
+
+lastreply_read() {
+  cat -- "$SESSIONS_DIR/$1/last_reply" 2>/dev/null || true
+}

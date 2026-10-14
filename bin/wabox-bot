@@ -365,6 +365,7 @@ fi
 #     needs them (and outbox/senddir/workdir) at call time, commands at dispatch
 #   - commands depends on backend_* hooks being available
 #   - batch is self-contained (SESSIONS_DIR + jq); inbox drains it
+#   - triage needs log + lastmsg; inbox consults it before each turn
 #   - inbox depends on routing, outbox, commands, batch, backend
 #   - loop depends on inbox
 # shellcheck source=lib/config.sh
@@ -419,6 +420,9 @@ source "$LIB_DIR/schedule.sh"
 source "$LIB_DIR/commands.sh"
 # shellcheck source=lib/batch.sh
 source "$LIB_DIR/batch.sh"
+# shellcheck source=lib/triage.sh
+source "$LIB_DIR/triage.sh"
+triage_check
 # shellcheck source=lib/inbox.sh
 source "$LIB_DIR/inbox.sh"
 # shellcheck source=lib/loop.sh
