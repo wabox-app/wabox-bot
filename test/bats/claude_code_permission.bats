@@ -144,6 +144,37 @@ teardown() {
   [ "$(jq -r '.denials[0].tool_name' <<<"$pending")" = "Bash" ]
 }
 
+@test "the resume prompt names the approved calls and the original request" {
+  # The bug this guards: a bare "o usuário autorizou, pode prosseguir" read as a
+  # forgery to the agent. Under `claude -p` a denial is just a failed tool call,
+  # so the agent had already finished its turn and never "asked" for anything.
+  cc_save_pending_permission "$SLUG" "Me manda a minha CNH-e" \
+    '[{"tool_name":"Bash","tool_input":{"command":"find ~/Valter -iname \"*cnh*\""}}]' "$(date +%s)"
+  PROMPT_FILE="$TMPDIR_TEST/prompt"
+  cc_run_turn() {
+    printf '%s' "$5" >"$PROMPT_FILE"   # prompt is arg 5
+    printf '%s' '{"result":"aqui está","permission_denials":[]}'
+  }
+
+  run cc_handle_permission_response "$SLUG" "conv" "stem" "/work" "Sim"
+  [ "$status" -eq 0 ]
+  prompt="$(cat "$PROMPT_FILE")"
+  [[ "$prompt" == *'• *Bash* — find ~/Valter -iname "*cnh*"'* ]]
+  [[ "$prompt" == *"Me manda a minha CNH-e"* ]]
+  [[ "$prompt" == *"não viu aquela resposta"* ]]
+}
+
+@test "a re-park after approval keeps the original request, not the 'sim'" {
+  cc_save_pending_permission "$SLUG" "Me manda a minha CNH-e" "$DENIALS" "$(date +%s)"
+  cc_run_turn() {
+    printf '%s' '{"result":"x","permission_denials":[{"tool_name":"Bash","tool_input":{"command":"ls"}}]}'
+  }
+
+  run cc_handle_permission_response "$SLUG" "conv" "stem" "/work" "sim"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.original_prompt' "$(cc_pending_permission_path "$SLUG")")" = "Me manda a minha CNH-e" ]
+}
+
 # ---- integration with /clear and /status -----------------------------------
 
 @test "backend_clear drops a parked permission" {

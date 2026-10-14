@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Approving a permission could leave the agent confused about what it was
+  approving.** Under `claude -p` a denied tool is just a failed call: the agent
+  works around it and finishes the turn. The user never saw that answer, only the
+  permission list. On "sim" the session was resumed with a bare "the user
+  approved, go ahead", which the agent read as a message it never asked for, and
+  it questioned it instead of acting. The resume prompt now lists the calls that
+  were blocked and are now allowed, says the user never saw the previous answer,
+  and repeats the original request.
+- **A second permission prompt in the same flow lost the original request.** When
+  an approved turn hit a new denial, the stored request became "sim". It is now
+  carried forward.
+
 ## [0.19.0] - 2026-10-13
 
 ### Added

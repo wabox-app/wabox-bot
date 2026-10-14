@@ -444,15 +444,40 @@ cc_handle_permission_response() {
   allowed="$(jq -r '[.denials[].tool_name] | unique | join(" ")' <<<"$pending" 2>/dev/null || true)"
   log_info "[$stem] permission granted by user; resuming with allowedTools=[$allowed]"
 
+  local original_prompt
+  original_prompt="$(jq -r '.original_prompt // ""' <<<"$pending" 2>/dev/null || true)"
+
   local response_json rc=0
   response_json="$(cc_run_turn "$slug" "$conv_key" "$stem" "$workdir" \
-    'O usuário autorizou. Pode prosseguir com a ação que você havia solicitado.' \
+    "$(cc_approval_prompt "$pending")" \
     "$allowed")" || rc=$?
   if ((rc != 0)); then
     return "$rc"
   fi
 
-  cc_emit_or_park "$slug" "$user_text" "$response_json"
+  # A resumed turn that hits a new denial parks again: carry the *original*
+  # request forward, not this "sim", so the next approval still knows the task.
+  cc_emit_or_park "$slug" "$original_prompt" "$response_json"
+}
+
+# The prompt that resumes an approved turn. A bare "the user approved, go on"
+# reads as a forgery to the agent: under `claude -p` a denial is just a failed
+# tool call, so it worked around it and *finished* the turn — it never asked for
+# anything. Meanwhile the user saw only the permission list, never that answer.
+# So spell out what happened: which calls were blocked and are now allowed, that
+# the previous answer never reached the user, and what the user asked for.
+cc_approval_prompt() {
+  local pending="$1" tools original
+  tools="$(cc_format_permission_message "$(jq -c '.denials // []' <<<"$pending")" |
+    grep '^•' || true)"
+  original="$(jq -r '.original_prompt // ""' <<<"$pending" 2>/dev/null || true)"
+  printf '[wabox-bot] Na sua resposta anterior, estas chamadas foram bloqueadas por falta de permissão:\n\n%s\n\n' "$tools"
+  printf 'O usuário não viu aquela resposta — no WhatsApp ele recebeu só um pedido de autorização para essas chamadas, e respondeu que sim. Elas agora estão liberadas. Execute-as e conclua o pedido original'
+  if [[ -n "$original" ]]; then
+    printf ', respondendo ao usuário como se fosse a primeira vez:\n\n%s' "$original"
+  else
+    printf ', respondendo ao usuário como se fosse a primeira vez.'
+  fi
 }
 
 # backend_reply(slug, conv_key, stem [, media_path media_type media_mime [, media_json]])
