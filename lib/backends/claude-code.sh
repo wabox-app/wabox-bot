@@ -417,6 +417,19 @@ cc_run_turn() {
   local response_json rc=0
   response_json="$(printf '%s' "$prompt" |
     "${runner[@]}" "${cmd[@]}" 2>>"$LOG_FILE")" || rc=$?
+  # A usage limit (subscription login) fails the turn instantly, with the reset
+  # time only in the result text on stdout — which an rc≠0 path used to drop
+  # unread. Report it as LIMIT_RC so callers wait for the reset (lib/limit.sh)
+  # instead of retrying into it or showing a generic error.
+  if ((rc != 124)) && declare -F limit_hit >/dev/null; then
+    local limit_msg
+    limit_msg="$(jq -r 'select(.is_error == true) | .result // empty' <<<"$response_json" 2>/dev/null || true)"
+    ((rc != 0)) && [[ -z "$limit_msg" ]] && limit_msg="$response_json"
+    if [[ -n "$limit_msg" ]] && limit_text_matches "$limit_msg"; then
+      limit_hit "$(printf '%.300s' "$limit_msg" | tr '\n' ' ')" >/dev/null
+      return "$LIMIT_RC"
+    fi
+  fi
   if ((rc != 0)); then
     return "$rc"
   fi

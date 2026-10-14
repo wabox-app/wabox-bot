@@ -188,3 +188,17 @@ mk_text() {
   [ -f "$WABOX_OUTBOX/q4.json" ]
   [[ "$(jq -r .text "$WABOX_OUTBOX/q4.json")" != *Replying* ]]
 }
+
+# ---- usage limit ------------------------------------------------------------
+
+@test "a message during a usage limit is answered with when it resets" {
+  backend_reply() {
+    jq -cn --argjson u "$(($(date +%s) + 600))" '{until: $u}' >"$LIMIT_FILE"
+    return "$LIMIT_RC"
+  }
+  mk_text "l1" "$DM" "L1" "oi" ""
+  handle_envelope "$WABOX_INBOX/l1.json"
+  out="$(jq -r .text "$WABOX_OUTBOX/l1.json")"
+  [[ "$out" == *"usage limit"* ]]
+  [[ "$out" == *"$(date -d "@$(limit_until)" +%H:%M)"* ]]
+}

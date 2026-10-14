@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A usage limit no longer loses scheduled reminders.** Under a subscription
+  login, Claude fails every turn instantly once the session or weekly limit is
+  hit ("You've hit your session limit · resets 11am (…)"). That was treated as
+  an ordinary error, so a due reminder was retried on every tick (182 calls in
+  an hour on one install) and then given up an hour *before* the limit lifted,
+  so it was never delivered. The claude-code backend now recognises the limit,
+  records when it resets (`$STATE_DIR/limit`), and exits 75. While it holds, the
+  scheduler fires nothing. A job that hit it is kept as it was, not deferred or
+  dropped. Once the limit lifts, held jobs run, and a recurring slot counts as
+  late only from the reset, so a 06:00 brief held until 07:30 still goes out. A
+  message you send meanwhile is answered with the reset time instead of a
+  generic error. If no reset time can be read, it retries after
+  `WABOX_LIMIT_RETRY` (15 min).
+
 ## [0.22.0] - 2026-10-14
 
 ### Added

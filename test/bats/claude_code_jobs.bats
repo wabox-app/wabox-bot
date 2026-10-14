@@ -132,3 +132,28 @@ notes() { cat "$(cc_job_notes_path "$SLUG")"; }
   backend_clear "$SLUG"
   [ ! -e "$(cc_job_notes_path "$SLUG")" ]
 }
+
+# ---- usage limits ---------------------------------------------------------------
+
+@test "a usage-limit failure is reported as LIMIT_RC and records the reset" {
+  printf '1' >"$TMPDIR_TEST/rc"
+  # The failing claude still prints its envelope; the reset is only in there.
+  cat >"$FAKE_BIN/claude" <<'EOF2'
+#!/usr/bin/env bash
+cat >/dev/null
+jq -cn '{type:"result", is_error:true,
+  result:"You\u0027ve hit your session limit · resets 11am (America/Sao_Paulo)"}'
+exit 1
+EOF2
+  run backend_reply "$SLUG" "$JID" stem <<<"oi"
+  [ "$status" -eq 75 ]
+  limit_active
+  grep -q "session limit" "$LIMIT_FILE"
+}
+
+@test "an ordinary failure is not mistaken for a limit" {
+  printf '1' >"$TMPDIR_TEST/rc"
+  run backend_reply "$SLUG" "$JID" stem <<<"oi"
+  [ "$status" -eq 1 ]
+  [ ! -e "$LIMIT_FILE" ]
+}

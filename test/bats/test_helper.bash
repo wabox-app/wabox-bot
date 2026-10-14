@@ -56,6 +56,8 @@ load_core() {
   source "$LIB_DIR/workdir.sh"
   # shellcheck source=lib/tz.sh
   source "$LIB_DIR/tz.sh"
+  # shellcheck source=lib/limit.sh
+  source "$LIB_DIR/limit.sh"
   # shellcheck source=lib/senddir.sh
   source "$LIB_DIR/senddir.sh"
   # shellcheck source=lib/media.sh

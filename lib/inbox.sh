@@ -417,6 +417,11 @@ handle_envelope() {
     if ((rc == 124)); then
       log_error "[$b_stem] backend timed out"
       reply="(Sorry — I took too long to think. Please try again.)"
+    elif ((rc == LIMIT_RC)); then
+      # Say when, so "try again" isn't a guess that hits the same wall.
+      local until_label
+      until_label="$(limit_when_label "$(conversation_tz "$slug")")"
+      reply="(I've hit the usage limit — it resets at ${until_label:-a later time}. Send this again after that; scheduled jobs will run then on their own.)"
     elif ((rc != 0)); then
       log_error "[$b_stem] backend exited rc=$rc"
       reply="(Sorry — I hit an error processing that message.)"

@@ -84,6 +84,11 @@ Module map:
   local; the claude-code backend exports it into the turn so the *agent's* clock
   is the user's, not the daemon's. An unknown zone is refused because
   `TZ=Foo/Bar` silently means UTC.
+- **limit.sh** — usage limits. A backend that finds its account out of quota
+  calls `limit_hit` with the error text and returns `LIMIT_RC` (75); the reset
+  time is parsed into `$STATE_DIR/limit`. The scheduler fires nothing while it
+  holds and measures a held job's lateness from the reset; inbox.sh tells the
+  user when it lifts.
 - **commands.sh** — core slash-command dispatcher.
 - **mcp.sh** — `wabox-bot mcp <slug>`: the scheduler as a stdio MCP server, one
   process per conversation. Every scheduling tool is a slash command run through

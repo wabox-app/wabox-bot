@@ -97,6 +97,7 @@ WABOX_JOB_TICK="${WABOX_JOB_TICK:-20}"                   # seconds between due-j
 WABOX_JOB_CATCHUP="${WABOX_JOB_CATCHUP:-3600}"
 WABOX_JOB_ISOLATED="${WABOX_JOB_ISOLATED:-1}"             # 1 = jobs run in their own lean session; what they send still joins the chat's history
 WABOX_JOB_MODE="${WABOX_JOB_MODE:-}"                      # permission mode for scheduled turns; empty = same as the conversation
+WABOX_LIMIT_RETRY="${WABOX_LIMIT_RETRY:-900}"           # usage limit with no readable reset time: retry after this many seconds
 WABOX_JOB_MAX="${WABOX_JOB_MAX:-50}"                     # jobs per conversation
 WABOX_JOB_MIN_INTERVAL="${WABOX_JOB_MIN_INTERVAL:-60}"   # floor under /every
 

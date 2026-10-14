@@ -165,6 +165,8 @@ if [[ "${1:-}" == "state" || "${1:-}" == "transcript" || "${1:-}" == "cmd" \
   source "$LIB_DIR/workdir.sh"
   # shellcheck source=lib/tz.sh
   source "$LIB_DIR/tz.sh"
+  # shellcheck source=lib/limit.sh
+  source "$LIB_DIR/limit.sh"
   # shellcheck source=lib/backend.sh
   source "$LIB_DIR/backend.sh"
   case "$SUBCMD" in
@@ -405,6 +407,8 @@ source "$LIB_DIR/workdir.sh"
 
 # shellcheck source=lib/tz.sh
 source "$LIB_DIR/tz.sh"
+# shellcheck source=lib/limit.sh
+source "$LIB_DIR/limit.sh"
 # shellcheck source=lib/senddir.sh
 source "$LIB_DIR/senddir.sh"
 # shellcheck source=lib/media.sh

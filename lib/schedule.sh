@@ -365,7 +365,7 @@ sched_wrap() {
   local kind="$1" id="$2" spec="$3" late="$4" text="$5" tz="${6:-}" created="${7:-0}"
   local noop="${WABOX_PROMPT_NOOP:-NOOP}" late_note="" reg=""
   if ((late > 60)); then
-    late_note=" This run is $(sched_human_dur "$late") late (the daemon was down, or this chat was busy) — mention the delay if it changes anything."
+    late_note=" This run is $(sched_human_dur "$late") late (the daemon was down, this chat was busy, or the usage limit was reached) — mention the delay if it changes anything."
   fi
   ((created > 0)) && reg=", registered $(sched_date "$tz" -d "@$created" '+%d/%m %H:%M')"
 
@@ -523,7 +523,15 @@ sched_fire() {
   # Missed-run policy: a recurring job whose slot is stale skips the occurrence
   # entirely, so a laptop asleep overnight doesn't wake to eight hourly checks.
   # A one-shot always fires, however late — see sched_wrap's delay note.
-  if [[ "$kind" != once ]] && ((late > WABOX_JOB_CATCHUP)); then
+  # A slot that came due while a usage limit was in force is stale only counted
+  # from when the limit lifted: the job was held, not missed, and a 06:00 brief
+  # held until a 07:30 reset should still go out at 07:30.
+  local stale="$late" lifted
+  lifted="$(limit_until)"
+  if [[ -n "$lifted" ]] && ((next_run <= lifted && lifted <= now)); then
+    stale=$((now - lifted))
+  fi
+  if [[ "$kind" != once ]] && ((stale > WABOX_JOB_CATCHUP)); then
     log_info "job[$slug#$id] skipping a missed run ($(sched_human_dur "$late") late)"
     sched_advance "$file" "$now" 0
     exec 6>&-
@@ -586,6 +594,13 @@ sched_fire() {
     3)
       sched_defer "$file" "$now" "the conversation was busy"
       ;;
+    "$LIMIT_RC")
+      # The account is out of quota until a known time. Not a deferral: the
+      # catch-up clock must not run out while we wait (that is how a reminder
+      # was once given up an hour before the limit lifted). Leave the job due;
+      # sched_tick fires nothing until the limit lifts, then this runs.
+      log_info "job[$slug#$id] held: usage limit until $(limit_when_label "$tz")"
+      ;;
     *)
       if [[ "$kind" == once ]]; then
         # Don't burn a reminder on a transient backend failure.
@@ -609,6 +624,9 @@ sched_tick() {
   now="$(date +%s)"
   ((now - SCHED_LAST_TICK >= WABOX_JOB_TICK)) || return 0
   SCHED_LAST_TICK="$now"
+  # Under a usage limit every turn fails instantly; firing anyway is a call
+  # per due job per tick into a wall. Due jobs wait and run once it lifts.
+  limit_active "$now" && return 0
 
   local f
   local -a files=()

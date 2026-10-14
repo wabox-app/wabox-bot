@@ -16,6 +16,7 @@
 #   1    usage / unknown slug
 #   3    conversation lock busy
 #   5    suppressed (empty or NOOP — nothing delivered)
+#   75   usage limit reached (lib/limit.sh records when it lifts)
 #   124  backend timeout (passthrough)
 #   other  backend error (passthrough)
 

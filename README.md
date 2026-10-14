@@ -520,6 +520,13 @@ is a materially smaller surface than the live chat. Two related guarantees: a jo
 never fires while a permission is parked (it would clobber the parked turn), and
 a job's own prompt is never mistaken for your "sim"/"não".
 
+**Usage limits.** When the account behind the backend runs out of quota (a
+Claude subscription's session or weekly limit), the bot reads the reset time
+from the error and waits for it: no job fires until then, a held job is neither
+dropped nor counted as missed, and a message you send meanwhile is answered with
+when the limit resets. If the reset time can't be read, it tries again after
+`WABOX_LIMIT_RETRY` seconds (900).
+
 **After downtime**, a one-shot fires however late it is (and says so); a
 recurring job whose slot is older than `WABOX_JOB_CATCHUP` (default 1h) skips
 that occurrence, so a laptop asleep overnight doesn't wake to eight backed-up

@@ -903,3 +903,60 @@ tick_now() { SCHED_LAST_TICK=0; sched_tick; wait; }
   grep -q "^iso=\[0\] " "$STUB_LOG"
   teardown_lib
 }
+
+# ---- usage limits (lib/limit.sh) ---------------------------------------------
+# Regression: under a subscription limit a one-shot was retried every tick for
+# an hour (182 calls) and then given up an hour before the limit lifted.
+
+set_limit() { jq -cn --argjson u "$(($(date +%s) + $1))" '{until: $u}' >"$LIMIT_FILE"; }
+
+@test "a job that hits the usage limit is held, not deferred or dropped" {
+  setup_sched
+  stub_prompt 75
+  cmd_reply "/in 1h pagar a psicóloga" >/dev/null
+  set_due 1 -5
+  before="$(job_field 1 .next_run)"
+  set_limit 3600
+  # The backend records the limit as it fails; the stub stands in for that.
+  SCHED_LAST_TICK=0; rm -f "$LIMIT_FILE"; sched_tick; wait
+  set_limit 3600
+  [ "$(fired_count)" -eq 1 ]
+  [ "$(job_field 1 .next_run)" = "$before" ]
+  [ "$(job_field 1 '.deferred_since // 0')" = "0" ]
+  teardown_lib
+}
+
+@test "nothing fires while the limit is in force; the held job runs once it lifts" {
+  setup_sched
+  stub_prompt 0
+  cmd_reply "/in 1h pagar a psicóloga" >/dev/null
+  set_due 1 -5
+  set_limit 3600
+  tick_now
+  tick_now
+  [ "$(fired_count)" -eq 0 ]
+  [ -f "$(job_file 1)" ]
+  set_limit -10
+  tick_now
+  [ "$(fired_count)" -eq 1 ]
+  [ ! -f "$(job_file 1)" ]
+  teardown_lib
+}
+
+@test "a recurring slot held by a limit counts as late only from the reset" {
+  setup_sched
+  stub_prompt 0
+  cmd_reply "/daily 06:00 morning brief" >/dev/null
+  # Due two hours ago — past the 1h catch-up — but a limit lifted a minute ago.
+  set_due 1 -7200
+  set_limit -60
+  tick_now
+  [ "$(fired_count)" -eq 1 ]
+  # Without the limit the same lateness is a missed run, as before.
+  set_due 1 -7200
+  rm -f "$LIMIT_FILE"
+  : >"$STUB_LOG"
+  tick_now
+  [ "$(fired_count)" -eq 0 ]
+  teardown_lib
+}
