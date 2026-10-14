@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`send_file` MCP tool: the agent can send a file it was asked for.** When
+  asked to "send me my CNH-e", an agent went looking for a tool to send files,
+  found none, and told the user it couldn't attach anything. The send folder
+  was mentioned only in one line of the system prompt. The scheduler's MCP server
+  (`/mcp add`) now has `send_file`, which queues a file from the conversation's
+  working folder to go out with the reply. It is pre-allowed like the other
+  tools, so it only accepts files inside the working folder (symlinks are judged
+  by where they lead) and enforces `WABOX_DOC_MAX_MB`.
+
+### Changed
+
+- **The system prompt now says the agent *can* send files.** The send-folder line
+  is worded as a capability, names `send_file` when the MCP server is registered,
+  and tells the agent never to claim it can't attach files. The seeded workdir
+  instructions say the same.
+
 ### Fixed
 
 - **Approving a permission could leave the agent confused about what it was

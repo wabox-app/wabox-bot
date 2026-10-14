@@ -68,11 +68,11 @@ INIT='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":
   teardown_lib
 }
 
-@test "tools/list advertises the seven scheduler tools with input schemas" {
+@test "tools/list advertises the scheduler tools and send_file with input schemas" {
   setup_mcp
   out="$(rpc "$INIT" '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | tail -1)"
   names="$(jq -r '.result.tools[].name' <<<"$out" | sort | tr '\n' ' ')"
-  [ "$names" = "cancel_job list_jobs schedule_at schedule_daily schedule_every schedule_in schedule_message " ]
+  [ "$names" = "cancel_job list_jobs schedule_at schedule_daily schedule_every schedule_in schedule_message send_file " ]
   [ "$(jq -r '.result.tools[] | select(.name=="schedule_in") | .inputSchema.required | join(",")' <<<"$out")" = "delay,text" ]
   teardown_lib
 }
@@ -166,6 +166,86 @@ and the inbox" ]
 }
 
 # ---- /mcp registration -------------------------------------------------------
+
+# ---- send_file -----------------------------------------------------------------
+
+# One tools/call to send_file; echoes the result object.
+send_file_rpc() {
+  local args
+  args="$(jq -cn --arg p "$1" '{path:$p}')"
+  rpc "$INIT" \
+    "$(jq -cn --argjson a "$args" '{jsonrpc:"2.0",id:2,method:"tools/call",params:{name:"send_file",arguments:$a}}')" |
+    jq -c 'select(.id==2) | .result'
+}
+
+@test "send_file queues a file from the working folder into the send folder" {
+  setup_mcp
+  wd="$(conversation_workdir "$SLUG")"
+  mkdir -p "$wd/docs"
+  printf 'pdf-bytes' >"$wd/docs/CNH-e.pdf"
+  res="$(send_file_rpc "docs/CNH-e.pdf")"
+  [ "$(jq -r '.isError' <<<"$res")" = "false" ]
+  [[ "$(jq -r '.content[0].text' <<<"$res")" == *"Queued CNH-e.pdf"* ]]
+  [ "$(cat "$(senddir_path "$wd")/CNH-e.pdf")" = "pdf-bytes" ]
+  # …and it is exactly what the loop attaches at the end of the turn.
+  [ "$(senddir_collect "$wd")" = "$(senddir_path "$wd")/CNH-e.pdf" ]
+  teardown_lib
+}
+
+@test "send_file refuses a file outside the working folder, symlinks included" {
+  setup_mcp
+  wd="$(conversation_workdir "$SLUG")"
+  printf 'secret' >"$TMPDIR_TEST/outside.txt"
+  res="$(send_file_rpc "$TMPDIR_TEST/outside.txt")"
+  [ "$(jq -r '.isError' <<<"$res")" = "true" ]
+  [[ "$(jq -r '.content[0].text' <<<"$res")" == *"outside the working folder"* ]]
+  ln -s "$TMPDIR_TEST/outside.txt" "$wd/link.txt"
+  res="$(send_file_rpc "link.txt")"
+  [ "$(jq -r '.isError' <<<"$res")" = "true" ]
+  res="$(send_file_rpc "../outside.txt")"
+  [ "$(jq -r '.isError' <<<"$res")" = "true" ]
+  [ -z "$(senddir_collect "$wd")" ]
+  teardown_lib
+}
+
+@test "send_file reports a missing file as a readable tool error" {
+  setup_mcp
+  res="$(send_file_rpc "nope.pdf")"
+  [ "$(jq -r '.isError' <<<"$res")" = "true" ]
+  [[ "$(jq -r '.content[0].text' <<<"$res")" == *"No such file"* ]]
+  teardown_lib
+}
+
+@test "send_file keeps two different files with the same name, and queues one file once" {
+  setup_mcp
+  wd="$(conversation_workdir "$SLUG")"
+  mkdir -p "$wd/a" "$wd/b"
+  printf 'one' >"$wd/a/doc.pdf"
+  printf 'two' >"$wd/b/doc.pdf"
+  send_file_rpc "a/doc.pdf" >/dev/null
+  send_file_rpc "b/doc.pdf" >/dev/null
+  res="$(send_file_rpc "a/doc.pdf")"
+  [[ "$(jq -r '.content[0].text' <<<"$res")" == *"Already queued: doc.pdf"* ]]
+  dir="$(senddir_path "$wd")"
+  [ "$(cat "$dir/doc.pdf")" = "one" ]
+  [ "$(cat "$dir/doc (2).pdf")" = "two" ]
+  [ "$(senddir_collect "$wd" | wc -l)" -eq 2 ]
+  teardown_lib
+}
+
+@test "send_file refuses a file over WABOX_DOC_MAX_MB" {
+  setup_mcp
+  wd="$(conversation_workdir "$SLUG")"
+  truncate -s 2M "$wd/big.bin"
+  res="$(printf '%s\n' "$INIT" '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"send_file","arguments":{"path":"big.bin"}}}' |
+    env WABOX_BOT_CONFIG="$WABOX_BOT_CONFIG" STATE_DIR="$STATE_DIR" \
+      WABOX_INBOX="$WABOX_INBOX" WABOX_OUTBOX="$WABOX_OUTBOX" LOG_FILE="$LOG_FILE" \
+      WABOX_DOC_MAX_MB=1 timeout 30 "$REPO_ROOT/bin/wabox-bot" mcp "$SLUG" 2>/dev/null |
+    jq -c 'select(.id==2) | .result')"
+  [ "$(jq -r '.isError' <<<"$res")" = "true" ]
+  [[ "$(jq -r '.content[0].text' <<<"$res")" == *"over the 1 MB limit"* ]]
+  teardown_lib
+}
 
 @test "/mcp add writes .mcp.json pointing at this executable and this slug" {
   setup_mcp

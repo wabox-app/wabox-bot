@@ -200,7 +200,12 @@ if [[ "${1:-}" == "state" || "${1:-}" == "transcript" || "${1:-}" == "cmd" \
       # The scheduler as an MCP server on stdio, one process per conversation —
       # spawned by the agent's client (see the claude-code backend's /mcp), not
       # by a human. Same libs as `cmd`, because every tool is a slash command
-      # run through cmd_main. Nothing but JSON-RPC may reach stdout from here.
+      # run through cmd_main, plus senddir/media for send_file. Nothing but
+      # JSON-RPC may reach stdout from here.
+      # shellcheck source=lib/senddir.sh
+      source "$LIB_DIR/senddir.sh"
+      # shellcheck source=lib/media.sh
+      source "$LIB_DIR/media.sh"
       # shellcheck source=lib/schedule.sh
       source "$LIB_DIR/schedule.sh"
       # shellcheck source=lib/commands.sh

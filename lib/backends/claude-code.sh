@@ -260,9 +260,19 @@ cc_run_turn() {
   # Advertise the outgoing-file folder (absolute, so the agent can write to it
   # regardless of any cd it does mid-turn). The loop attaches whatever lands
   # there to this turn's reply — see lib/senddir.sh / lib/inbox.sh.
+  # Worded as a capability, not a footnote: an agent that missed the old
+  # one-liner told the user it had no way to attach files. When the scheduler
+  # MCP is registered, point at its send_file tool first, since that's where an
+  # agent looking for "how do I send this" searches, and it needs no permission.
   if [[ "$CC_ADVERTISE_SEND_DIR" == "1" ]]; then
-    cmd+=(--append-system-prompt \
-      "To send the user a file over WhatsApp, write it to $(senddir_path "$workdir")/ — any file you leave in that folder is attached to your reply and delivered.")
+    local send_hint="You can send the user files over WhatsApp (PDFs, images, documents). "
+    if cc_mcp_registered "$workdir"; then
+      send_hint+="Use the mcp__${MCP_SERVER_NAME}__send_file tool, or copy the file into $(senddir_path "$workdir")/."
+    else
+      send_hint+="Copy or write the file into $(senddir_path "$workdir")/."
+    fi
+    send_hint+=" Anything there when your turn ends is attached to your reply, with your reply as its caption. Never tell the user you can't send or attach files."
+    cmd+=(--append-system-prompt "$send_hint")
   fi
   # State the zone as well as running in it: `date` is a permission-gated Bash
   # call, so an agent that can't get it approved would otherwise have no way to

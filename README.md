@@ -535,7 +535,7 @@ It writes two files in the working folder and reports what it did:
 
 - `.mcp.json` — spawns `wabox-bot mcp <slug>`, a stdio MCP server exposing
   `schedule_in`, `schedule_at`, `schedule_every`, `schedule_daily`,
-  `schedule_message`, `list_jobs` and `cancel_job`. The slug is baked into the spawn line, so the tools are
+  `schedule_message`, `list_jobs`, `cancel_job` and `send_file`. The slug is baked into the spawn line, so the tools are
   scoped to this conversation and the agent never has to know its own id.
 - `.claude/settings.local.json` — enables the server (`enabledMcpjsonServers`)
   and pre-allows its tools (`permissions.allow`). Both are required in headless
@@ -543,8 +543,15 @@ It writes two files in the working folder and reports what it did:
   `settings.json` so a workdir that is also a git repo can't have it reverted
   by a pull.
 
-Each tool is the matching slash command underneath — same grammar, same limits,
-same replies — so there is one scheduler, not two. It takes effect in a new
+Each scheduling tool is the matching slash command underneath — same grammar,
+same limits, same replies — so there is one scheduler, not two.
+
+`send_file` puts a file in the [send folder](#sending-files-back), so it goes
+out with the agent's reply. Because the tools are pre-allowed, it only accepts
+files inside the conversation's working folder (symlinks are followed to where
+they really point) and refuses anything over `WABOX_DOC_MAX_MB`. A file
+elsewhere can still be sent by copying it in with `cp`, which goes through the
+normal Bash permission. It takes effect in a new
 session (`/clear` starts one).
 
 > If the folder isn't trusted by Claude Code, it ignores project MCP servers and

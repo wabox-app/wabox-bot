@@ -10,7 +10,7 @@
 # tool call is already scoped, and MCP tools are permissioned as themselves
 # rather than as arbitrary shell.
 #
-# Every tool is a thin wrapper over cmd_main — the same handle_slash_command the
+# Every scheduling tool is a thin wrapper over cmd_main — the same handle_slash_command the
 # daemon and the CLI use. Nothing here re-validates a duration or a time: one
 # grammar, one set of error messages, one place where WABOX_JOB_MAX is enforced.
 #
@@ -92,6 +92,17 @@ mcp_tools_json() {
     }
   },
   {
+    "name": "send_file",
+    "description": "Send the user a file over WhatsApp (a PDF, an image, a document). The file is attached to the reply you give at the end of this turn, and your reply text becomes its caption, so say what you're sending. Call it once per file. Only files inside this conversation's working folder can be sent.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {"type": "string", "description": "The file to send: absolute, or relative to the working folder."}
+      },
+      "required": ["path"]
+    }
+  },
+  {
     "name": "list_jobs",
     "description": "List every job scheduled in this conversation, with its id, rule, next run and text. Call this before cancelling, and to answer \"what have you got scheduled for me?\".",
     "inputSchema": {"type": "object", "properties": {}}
@@ -151,10 +162,77 @@ mcp_call_tool() {
       a="$(jq -r '.id // ""' <<<"$args_json")"
       cmd_main "$slug" "/cancel $a"
       ;;
+    send_file)
+      mcp_send_file "$slug" "$(jq -r '.path // ""' <<<"$args_json")"
+      ;;
     *)
       return 1
       ;;
   esac
+}
+
+# send_file: the one tool that isn't a slash command. An agent told about the
+# send folder only in its system prompt went looking for a *tool* to send a file,
+# found none, and told the user it couldn't attach anything. So the folder gets
+# a tool in front of it. It only copies into the send folder; the loop attaches
+# whatever is there at the end of the turn, exactly as it does for a `cp`.
+#
+# Scoped to the working folder on purpose. `mcp__wabox` is pre-allowed, so this
+# runs with no permission prompt, and the bot also talks to people other than
+# its owner: an unscoped tool would let a talked-into agent mail out ~/.ssh with
+# nobody asked. A file outside the folder can still be sent with `cp`, which goes
+# through the normal Bash permission.
+#
+# Prints the outcome; rc 2 marks a refusal the agent should read (isError).
+mcp_send_file() {
+  local slug="$1" path="$2" workdir root real
+  workdir="$(conversation_workdir "$slug")"
+  if [[ -z "$path" ]]; then
+    printf 'send_file needs a path.'
+    return 2
+  fi
+  [[ "$path" == /* ]] || path="$workdir/$path"
+  root="$(realpath -e -- "$workdir" 2>/dev/null)" || root="$workdir"
+  # realpath resolves symlinks and `..`, so a link inside the folder pointing
+  # out of it is judged by where it really leads.
+  if ! real="$(realpath -e -- "$path" 2>/dev/null)" || [[ ! -f "$real" ]]; then
+    printf 'No such file: %s' "$path"
+    return 2
+  fi
+  if [[ "$real" != "$root"/* ]]; then
+    printf 'Refused: %s is outside the working folder (%s). Copy it into %s with cp instead; that asks the user for permission.' \
+      "$path" "$root" "$(senddir_path "$workdir")"
+    return 2
+  fi
+  local size_mb
+  size_mb="$(media_size_mb "$real" 2>/dev/null)" || size_mb=0
+  if ((size_mb > ${WABOX_DOC_MAX_MB:-100})); then
+    printf 'Refused: %s is %s MB, over the %s MB limit.' "${real##*/}" "$size_mb" "${WABOX_DOC_MAX_MB:-100}"
+    return 2
+  fi
+
+  local dir dest base stem ext n=2
+  dir="$(senddir_path "$workdir")"
+  mkdir -p -- "$dir"
+  base="${real##*/}"
+  dest="$dir/$base"
+  # Same name sent twice in one turn (two "CNH.pdf" from different folders):
+  # keep both, the WhatsApp filename just gains a counter. The same file twice
+  # is queued once.
+  if [[ "$base" == *.* ]]; then stem="${base%.*}" ext=".${base##*.}"; else stem="$base" ext=""; fi
+  while [[ -e "$dest" ]]; do
+    if cmp -s -- "$real" "$dest"; then
+      printf 'Already queued: %s.' "${dest##*/}"
+      return 0
+    fi
+    dest="$dir/$stem ($n)$ext"
+    n=$((n + 1))
+  done
+  if ! cp -- "$real" "$dest" 2>/dev/null; then
+    printf 'Could not copy %s into the send folder.' "$path"
+    return 2
+  fi
+  printf 'Queued %s. It will be attached to your reply when this turn ends; write the reply as its caption.' "${dest##*/}"
 }
 
 # ---- JSON-RPC plumbing -------------------------------------------------------
@@ -246,6 +324,9 @@ mcp_main() {
         reply="$(mcp_call_tool "$slug" "$name" "$args" 2>/dev/null)" || rc=$?
         if ((rc == 1)) && [[ -z "$reply" ]]; then
           mcp_emit_text "$id" "Unknown tool: $name" true
+        elif ((rc == 2)); then
+          log_info "mcp[$slug] $name refused: ${reply%%$'\n'*}"
+          mcp_emit_text "$id" "$reply" true
         elif ((rc != 0)); then
           mcp_emit_text "$id" "wabox-bot could not run $name (exit $rc)." true
         else

@@ -86,7 +86,9 @@ Module map:
   `TZ=Foo/Bar` silently means UTC.
 - **commands.sh** — core slash-command dispatcher.
 - **mcp.sh** — `wabox-bot mcp <slug>`: the scheduler as a stdio MCP server, one
-  process per conversation. Every tool is a slash command run through `cmd_main`.
+  process per conversation. Every scheduling tool is a slash command run through
+  `cmd_main`; `send_file` is the exception: it copies a file from the working
+  folder (and only from there, since the tools are pre-allowed) into the send folder.
   Only JSON-RPC may reach stdout, so `mcp_main` moves the real stdout to fd 3 and
   points stdout at stderr; the emitters write to fd 3.
 - **loop.sh** — catch-up of pre-existing inbox files + inotify-via-FIFO main loop.

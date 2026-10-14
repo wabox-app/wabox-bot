@@ -49,3 +49,20 @@ model_arg() {
   backend_reply "$SLUG" "$JID" stem <<<"oi" >/dev/null 2>&1
   ! grep -qx -- '--model' "$TMPDIR_TEST/argv"
 }
+
+# ---- the send-file hint in the system prompt ----------------------------------
+# An agent that missed the old one-liner told the user it couldn't attach files.
+
+@test "the send hint names the send_file tool when the MCP server is registered" {
+  wd="$(conversation_workdir "$SLUG")"
+  printf '{"mcpServers":{"wabox":{"command":"x","args":[]}}}' >"$wd/.mcp.json"
+  backend_reply "$SLUG" "$JID" stem <<<"oi" >/dev/null 2>&1
+  grep -q 'mcp__wabox__send_file' "$TMPDIR_TEST/argv"
+  grep -q "Never tell the user you can't send or attach files" "$TMPDIR_TEST/argv"
+}
+
+@test "without the MCP server the send hint points at the folder only" {
+  backend_reply "$SLUG" "$JID" stem <<<"oi" >/dev/null 2>&1
+  ! grep -q 'send_file' "$TMPDIR_TEST/argv"
+  grep -q 'Copy or write the file into .*/.wabox/send/' "$TMPDIR_TEST/argv"
+}
