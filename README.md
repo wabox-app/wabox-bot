@@ -491,8 +491,20 @@ in the conversation that registered it.
   listing off with `CC_ADVERTISE_JOBS=0` if you'd rather spend the context.
 - **Firing is the `prompt` verb**, so everything above applies: the
   per-conversation lock, the working folder, the send folder (a scheduled turn
-  can attach a file it generates), and session continuity — a later "what did you
-  remind me about?" works.
+  can attach a file it generates).
+- **Jobs run in a session of their own** (`WABOX_JOB_ISOLATED=1`, the default).
+  A job's prompt is self-contained, so it starts lean instead of replaying the
+  whole chat, and its tool chatter stays out of the conversation. What it
+  *delivers* still joins the conversation: with the claude-code backend, every
+  message a job sent since your last turn is handed to the main session, labelled
+  with its job number and time, ahead of your next message — so a later "what did
+  you remind me about?" or "e o segundo item?" works, whichever of several jobs
+  it refers to. NOOP runs leave nothing behind. Set `WABOX_JOB_ISOLATED=0` to run
+  jobs inside the conversation's session as before.
+- **Replying with a quote says which message you mean.** When you use
+  WhatsApp's reply on an earlier message, the agent is told which one (a short
+  excerpt), so answering the 6:00 brief after the 6:30 one arrived isn't
+  ambiguous.
 - `/jobs` prints each job's next run **and the zone it resolved in**. Set
   `WABOX_JOB_TZ` (e.g. `America/Sao_Paulo`) if the daemon runs under a unit with
   a stripped environment, or "09:00" will quietly mean 09:00 UTC. Daily jobs

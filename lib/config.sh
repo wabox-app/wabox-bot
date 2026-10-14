@@ -167,6 +167,14 @@ WABOX_JOB_MODE="${WABOX_JOB_MODE:-}"
 # Same shape check the /mode command applies, for the same reason: the value is
 # passed straight to the backend CLI.
 [[ -z "$WABOX_JOB_MODE" || "$WABOX_JOB_MODE" =~ ^[A-Za-z][A-Za-z0-9_-]{0,31}$ ]] || WABOX_JOB_MODE=""
+# Run scheduled turns in a fresh session of their own instead of the
+# conversation's. A job's prompt is self-contained, so replaying the whole chat
+# into it only costs tokens and lets its tool chatter pile up in the thread. What
+# a job *delivers* still reaches the conversation: backends that support it
+# (claude-code) hand it to the main session on its next turn. 0 ⇒ the old
+# behaviour, jobs run inside the conversation's session.
+WABOX_JOB_ISOLATED="${WABOX_JOB_ISOLATED:-1}"
+[[ "$WABOX_JOB_ISOLATED" == 0 ]] || WABOX_JOB_ISOLATED=1
 # Guardrails, because the agent can create jobs too (it shells out to
 # `wabox-bot job add`): a per-conversation cap, and a floor under /every so a
 # stray `/every 1s` can't hammer the backend forever.
@@ -206,8 +214,8 @@ CONFIG_VARS=(
   WABOX_ACK_REACT WABOX_BATCH_WINDOW WABOX_BOT_ALLOW_REMOTE_UPDATE WABOX_BOT_BACKEND
   WABOX_BOT_UPDATE_CHECK WABOX_BOT_UPDATE_NET_TIMEOUT WABOX_DOC_MAX_MB
   WABOX_FW_COMPUTE WABOX_FW_DEVICE WABOX_FW_MODEL
-  WABOX_INBOX WABOX_JOB_CATCHUP WABOX_JOB_MAX WABOX_JOB_MIN_INTERVAL
-  WABOX_JOB_MODE
+  WABOX_INBOX WABOX_JOB_CATCHUP WABOX_JOB_ISOLATED WABOX_JOB_MAX
+  WABOX_JOB_MIN_INTERVAL WABOX_JOB_MODE
   WABOX_JOB_TICK WABOX_JOB_TZ WABOX_MEDIA_DIR WABOX_MEDIA_KEEP_DAYS
   WABOX_OPENAI_WHISPER_MODEL WABOX_OUTBOX WABOX_PROCESSED_KEEP_DAYS
   WABOX_QUOTE_REPLY WABOX_SEND_DIR WABOX_SEND_KEEP_DAYS

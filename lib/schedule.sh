@@ -557,7 +557,12 @@ sched_fire() {
     # only — a job runs unattended, so a tool that parks a yes/no doesn't delay
     # it, it replaces the reminder. Empty ⇒ prompt_main sees nothing and the
     # conversation's own mode applies, which is the old behaviour.
-    WABOX_TURN_MODE="${WABOX_JOB_MODE:-}" prompt_main "$slug" "$body" >/dev/null || rc=$?
+    # WABOX_TURN_ISOLATED runs it in a session of its own (WABOX_JOB_ISOLATED);
+    # the label is how the main session is later told which job sent what.
+    WABOX_TURN_MODE="${WABOX_JOB_MODE:-}" \
+      WABOX_TURN_ISOLATED="$WABOX_JOB_ISOLATED" \
+      WABOX_TURN_LABEL="job #$id ($spec)" \
+      prompt_main "$slug" "$body" >/dev/null || rc=$?
   fi
 
   case "$rc" in

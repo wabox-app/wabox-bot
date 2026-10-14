@@ -6,7 +6,8 @@
 # persistent thread.
 #
 # Owns the per-conversation `.session`, `.model`, `.mode`, and `.system`
-# state files for its slug. Implements the wabox-bot backend contract:
+# state files for its slug, plus `job_notes` (what isolated scheduled turns
+# sent, queued for the main session). Implements the wabox-bot backend contract:
 #
 #   backend_name              — short id ("claude-code")
 #   backend_reply             — runs the Claude turn (stdin → stdout)
@@ -115,6 +116,67 @@ cc_resumable_session() {
   cwd="$(cc_session_cwd_for "$slug" || true)"
   [[ -n "$sid" && "$cwd" == "$workdir" ]] || return 1
   printf '%s' "$sid"
+}
+
+# ---- Job notes: isolated scheduled turns, carried into the main session ----
+#
+# A scheduled turn (WABOX_TURN_ISOLATED=1) runs in a throwaway session so it
+# starts lean — a morning brief doesn't need, or pay for, weeks of chat — and so
+# its tool chatter doesn't bloat the conversation it reports into. But what it
+# *sent* belongs to the conversation: the user answers the brief, and "that
+# second item" must resolve. So the delivered reply is queued here and handed
+# to the main session as a preamble on its next turn. Both kinds of turn hold
+# the per-conversation lock, so the append and the take never interleave.
+
+# Per note, so one verbose job can't crowd out the rest; and in total, so a chat
+# left silent for a week doesn't open its next turn with every brief since.
+CC_JOB_NOTE_MAX="${CC_JOB_NOTE_MAX:-3000}"
+CC_JOB_NOTES_MAX="${CC_JOB_NOTES_MAX:-12000}"
+
+cc_job_notes_path() {
+  printf '%s/job_notes' "$(backend_state_dir "$1")"
+}
+
+# cc_record_job_note <slug> <label> <reply> — queue what a job delivered.
+# Skips what was never delivered: an empty reply or the NOOP sentinel (same
+# trim-and-compare as lib/prompt.sh, which drops those after we return).
+cc_record_job_note() {
+  local slug="$1" label="$2" reply="$3"
+  local trimmed="${reply#"${reply%%[![:space:]]*}"}"
+  trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+  [[ -n "$trimmed" && "$trimmed" != "${WABOX_PROMPT_NOOP:-NOOP}" ]] || return 0
+  if ((${#trimmed} > CC_JOB_NOTE_MAX)); then
+    trimmed="${trimmed:0:CC_JOB_NOTE_MAX} […]"
+  fi
+  local when
+  when="$(TZ="$(conversation_tz "$slug")" date '+%d/%m %H:%M')"
+  printf -- '--- %s, sent %s ---\n%s\n\n' "${label:-scheduled job}" "$when" "$trimmed" \
+    >>"$(cc_job_notes_path "$slug")"
+}
+
+# cc_job_notes_preamble <slug> — echo the queued notes framed for the main
+# session (nothing when none). The file is removed by the caller only after the
+# turn succeeds, so a failed turn carries them to the next one.
+cc_job_notes_preamble() {
+  local f notes
+  f="$(cc_job_notes_path "$1")"
+  [[ -s "$f" ]] || return 0
+  notes="$(cat -- "$f")"
+  if ((${#notes} > CC_JOB_NOTES_MAX)); then
+    notes="(older scheduled messages omitted)
+${notes:${#notes}-CC_JOB_NOTES_MAX}"
+  fi
+  # Says *why* the messages are new to this session: without it a careful agent
+  # reads "you sent this" as a claim its transcript can't back up.
+  cat <<EOF
+[wabox-bot: since your last turn, scheduled jobs ran in separate sessions and
+sent the user the WhatsApp messages below. They were sent as you and are part of
+this conversation — the user may be replying to one of them.]
+
+$notes
+--- end of scheduled messages; the user's new message follows ---
+
+EOF
 }
 
 cc_model_for() {
@@ -246,8 +308,12 @@ cc_compose_prompt() {
 cc_run_turn() {
   local slug="$1" conv_key="$2" stem="$3" workdir="$4" prompt="$5" extra_allowed="${6:-}"
 
-  local sid_existing sid conv_tz
-  sid_existing="$(cc_resumable_session "$slug" "$workdir" || true)"
+  local sid_existing="" sid conv_tz
+  # An isolated (scheduled) turn neither resumes nor replaces the conversation's
+  # session — see the job-notes block above.
+  local isolated=0
+  [[ "${WABOX_TURN_ISOLATED:-}" == "1" ]] && isolated=1
+  ((isolated)) || sid_existing="$(cc_resumable_session "$slug" "$workdir" || true)"
   conv_tz="$(conversation_tz "$slug")"
 
   local -a cmd=("$CLAUDE_BIN")
@@ -331,7 +397,11 @@ cc_run_turn() {
   else
     sid="$(uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid)"
     cmd+=(--session-id "$sid")
-    log_info "[$stem] conv=$conv_key new session=$sid"
+    if ((isolated)); then
+      log_info "[$stem] conv=$conv_key isolated session=$sid"
+    else
+      log_info "[$stem] conv=$conv_key new session=$sid"
+    fi
   fi
 
   # Run the turn in the *user's* zone, not the daemon's. Under systemd the
@@ -370,7 +440,7 @@ cc_run_turn() {
   local sid_returned
   sid_returned="$(jq -r '.session_id // empty' <<<"$response_json" 2>/dev/null || true)"
   [[ -n "$sid_returned" ]] && sid="$sid_returned"
-  cc_save_session_id "$slug" "$sid" "$workdir"
+  ((isolated)) || cc_save_session_id "$slug" "$sid" "$workdir"
 
   printf '%s' "$response_json"
 }
@@ -533,12 +603,34 @@ backend_reply() {
 
   local prompt
   prompt="$(cc_compose_prompt "$text" "$media_json")"
+  local isolated=0
+  [[ "${WABOX_TURN_ISOLATED:-}" == "1" ]] && isolated=1
+  # A main-session turn first catches up on what scheduled jobs sent meanwhile.
+  if ((!isolated)); then
+    local preamble
+    preamble="$(cc_job_notes_preamble "$slug")"
+    [[ -n "$preamble" ]] && prompt="$preamble"$'\n'"$prompt"
+  fi
   local response_json rc=0
   response_json="$(cc_run_turn "$slug" "$conv_key" "$stem" "$workdir" "$prompt")" || rc=$?
   if ((rc != 0)); then
     return "$rc"
   fi
 
+  if ((isolated)); then
+    # A permission question isn't something the job said: the approval resumes
+    # the *main* session with the job's request (cc_approval_prompt), so the
+    # outcome lands in the history that way instead.
+    local reply denials
+    reply="$(cc_emit_or_park "$slug" "$prompt" "$response_json")"
+    denials="$(jq -c '.permission_denials // []' <<<"$response_json" 2>/dev/null || echo '[]')"
+    if [[ -z "$denials" || "$denials" == "[]" ]]; then
+      cc_record_job_note "$slug" "${WABOX_TURN_LABEL:-}" "$reply"
+    fi
+    printf '%s' "$reply"
+    return 0
+  fi
+  rm -f -- "$(cc_job_notes_path "$slug")"
   cc_emit_or_park "$slug" "$prompt" "$response_json"
 }
 
@@ -548,8 +640,9 @@ backend_clear() {
   local slug="$1" d
   d="$(backend_state_dir "$slug")"
   # Also drop any parked permission — a cleared conversation has no turn to
-  # resume into, so a stale yes/no answer would have nowhere to go.
-  rm -f -- "$d/session" "$d/session.cwd" "$d/pending_permission.json"
+  # resume into, so a stale yes/no answer would have nowhere to go — and the
+  # queued job notes, which would otherwise open the fresh session with history.
+  rm -f -- "$d/session" "$d/session.cwd" "$d/pending_permission.json" "$d/job_notes"
 }
 
 # ---- /mcp: register the scheduler MCP server in this workdir ----------------

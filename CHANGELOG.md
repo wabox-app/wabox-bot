@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A quoted reply tells the agent which message it answers.** wabox has always
+  carried the quoted message, but it was dropped, so "e o segundo item?" sent as
+  a reply to an older message reached the agent with no way to tell which one it
+  meant. The turn now opens with `[Replying to your earlier message: "…"]` (a
+  short excerpt). Slash commands are unaffected.
+
+### Changed
+
+- **Scheduled jobs run in a session of their own.** A job's prompt is
+  self-contained, but it ran inside the conversation's session, so every brief
+  and check replayed the whole chat (cost and latency) and left its tool chatter
+  in the thread. Jobs now start a fresh, throwaway session. What a job *delivers*
+  still becomes part of the conversation: with the claude-code backend, every
+  message jobs sent since the last turn is handed to the main session ahead of
+  the user's next message, labelled with job number and time, so a reply to any
+  of several job messages resolves. NOOP runs leave nothing. A permission a job
+  hits is approved into the main session, as before. `WABOX_JOB_ISOLATED=0`
+  restores the old behaviour.
+
 ## [0.21.0] - 2026-10-14
 
 ### Added

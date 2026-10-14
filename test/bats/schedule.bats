@@ -883,3 +883,23 @@ tick_now() { SCHED_LAST_TICK=0; sched_tick; wait; }
   grep -qx "mode=\[bypassPermissions\]" "$STUB_LOG"
   teardown_lib
 }
+
+@test "a job turn is isolated and labelled by default, and WABOX_JOB_ISOLATED=0 opts out" {
+  setup_sched
+  prompt_main() {
+    printf '%s\n' "iso=[${WABOX_TURN_ISOLATED-UNSET}] label=[${WABOX_TURN_LABEL-UNSET}]" >>"$STUB_LOG"
+    return 0
+  }
+  STUB_LOG="$TMPDIR_TEST/fired.log"; : >"$STUB_LOG"
+  cmd_reply "/in 1h a" >/dev/null
+  set_due 1 -5
+  tick_now
+  grep -q "^iso=\[1\] label=\[job #1 (" "$STUB_LOG"
+  : >"$STUB_LOG"
+  WABOX_JOB_ISOLATED=0
+  cmd_reply "/in 1h b" >/dev/null
+  set_due 1 -5
+  tick_now
+  grep -q "^iso=\[0\] " "$STUB_LOG"
+  teardown_lib
+}
