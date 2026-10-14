@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-10-14
+
 ### Added
 
 - **A quoted reply tells the agent which message it answers.** wabox has always
@@ -642,7 +644,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `install.sh` one-liner: clones to `~/.local/share/wabox-bot`, symlinks
   `bin/wabox-bot` into `~/.local/bin/`.
 
-[Unreleased]: https://github.com/wabox-app/wabox-bot/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/wabox-app/wabox-bot/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/wabox-app/wabox-bot/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/wabox-app/wabox-bot/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/wabox-app/wabox-bot/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/wabox-app/wabox-bot/compare/v0.18.1...v0.19.0
