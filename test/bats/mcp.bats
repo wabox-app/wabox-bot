@@ -167,6 +167,20 @@ and the inbox" ]
 
 # ---- /mcp registration -------------------------------------------------------
 
+@test "schedule_daily takes days, and refuses days it can't read" {
+  setup_mcp
+  out="$(rpc "$INIT" \
+    '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"schedule_daily","arguments":{"time":"15:00","days":"fri","text":"weekly review"}}}' \
+    '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"schedule_daily","arguments":{"time":"15:00","days":"someday","text":"x"}}}')"
+  [ "$(jq -r 'select(.id==2) | .result.isError' <<<"$out")" = "false" ]
+  [ "$(jq -r '.days' "$JOBS_DIR/$SLUG/1.json")" = "5" ]
+  [ "$(jq -r '.text' "$JOBS_DIR/$SLUG/1.json")" = "weekly review" ]
+  # An unreadable day spec must not slip into the text as its first word.
+  [ "$(jq -r 'select(.id==3) | .result.isError' <<<"$out")" = "true" ]
+  [ ! -e "$JOBS_DIR/$SLUG/2.json" ]
+  teardown_lib
+}
+
 # ---- send_file -----------------------------------------------------------------
 
 # One tools/call to send_file; echoes the result object.

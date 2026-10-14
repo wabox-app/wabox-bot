@@ -194,6 +194,115 @@ job_field() { jq -r "$2" "$(job_file "$1")"; }
   teardown_lib
 }
 
+# ---- days of the week ----------------------------------------------------------
+# Without them a weekly job was a daily one asking the agent "is it Friday?" —
+# a full turn every day to answer NOOP six times out of seven.
+
+@test "sched_parse_days: Portuguese and English, short and long" {
+  setup_sched
+  [ "$(sched_parse_days sex)" = "5" ]
+  [ "$(sched_parse_days sexta)" = "5" ]
+  [ "$(sched_parse_days sexta-feira)" = "5" ]
+  [ "$(sched_parse_days Fri)" = "5" ]
+  [ "$(sched_parse_days friday)" = "5" ]
+  [ "$(sched_parse_days sáb)" = "6" ]
+  [ "$(sched_parse_days terça)" = "2" ]
+  teardown_lib
+}
+
+@test "sched_parse_days: lists, ranges (wrapping too) and shortcuts" {
+  setup_sched
+  [ "$(sched_parse_days seg,qua,sex)" = "135" ]
+  [ "$(sched_parse_days seg-sex)" = "12345" ]
+  [ "$(sched_parse_days sex-seg)" = "1567" ]
+  [ "$(sched_parse_days úteis)" = "12345" ]
+  [ "$(sched_parse_days weekdays)" = "12345" ]
+  [ "$(sched_parse_days fds)" = "67" ]
+  [ "$(sched_parse_days sex,fds)" = "567" ]
+  # All seven days is plain daily.
+  [ "$(sched_parse_days seg-dom)" = "" ]
+  teardown_lib
+}
+
+@test "sched_parse_days: anything else is not a day spec" {
+  setup_sched
+  run sched_parse_days rode
+  [ "$status" -ne 0 ]
+  run sched_parse_days "seg-xyz"
+  [ "$status" -ne 0 ]
+  run sched_parse_days ""
+  [ "$status" -ne 0 ]
+  teardown_lib
+}
+
+@test "sched_next_daily with days lands on the next allowed weekday" {
+  setup_sched
+  # Monday 2026-10-12 10:00 in São Paulo.
+  base="$(TZ=America/Sao_Paulo date -d '2026-10-12 10:00' +%s)"
+  nr="$(sched_next_daily America/Sao_Paulo 15:00 "$base" 5)"
+  [ "$(TZ=America/Sao_Paulo date -d "@$nr" '+%F %H:%M %u')" = "2026-10-16 15:00 5" ]
+  # Friday after the hour ⇒ the following Friday, not Saturday.
+  base="$(TZ=America/Sao_Paulo date -d '2026-10-16 16:00' +%s)"
+  nr="$(sched_next_daily America/Sao_Paulo 15:00 "$base" 5)"
+  [ "$(TZ=America/Sao_Paulo date -d "@$nr" '+%F %H:%M')" = "2026-10-23 15:00" ]
+  # Friday before the hour ⇒ today.
+  base="$(TZ=America/Sao_Paulo date -d '2026-10-16 14:00' +%s)"
+  nr="$(sched_next_daily America/Sao_Paulo 15:00 "$base" 5)"
+  [ "$(TZ=America/Sao_Paulo date -d "@$nr" '+%F %H:%M')" = "2026-10-16 15:00" ]
+  # Weekdays from Friday evening skip the weekend.
+  base="$(TZ=America/Sao_Paulo date -d '2026-10-16 20:00' +%s)"
+  nr="$(sched_next_daily America/Sao_Paulo 09:00 "$base" 12345)"
+  [ "$(TZ=America/Sao_Paulo date -d "@$nr" '+%F %H:%M')" = "2026-10-19 09:00" ]
+  teardown_lib
+}
+
+@test "/daily with a day spec records the days and says so" {
+  setup_sched
+  out="$(cmd_reply "/daily 15:00 sex rode o friday-review")"
+  [[ "$out" == *"daily 15:00 Fri"* ]]
+  [ "$(job_field 1 .days)" = "5" ]
+  [ "$(job_field 1 .text)" = "rode o friday-review" ]
+  [ "$(TZ=America/Sao_Paulo date -d "@$(job_field 1 .next_run)" '+%u %H:%M')" = "5 15:00" ]
+  teardown_lib
+}
+
+@test "/daily without a day spec is unchanged, and a non-day first word stays in the text" {
+  setup_sched
+  cmd_reply "/daily 09:00 rode o morning-brief" >/dev/null
+  [ "$(job_field 1 .days)" = "null" ]
+  [ "$(job_field 1 .text)" = "rode o morning-brief" ]
+  teardown_lib
+}
+
+@test "/daily with only a day spec still asks what to schedule" {
+  setup_sched
+  out="$(cmd_reply "/daily 15:00 sex")"
+  [[ "$out" == *"Schedule what?"* ]]
+  [ ! -e "$(job_file 1)" ]
+  teardown_lib
+}
+
+@test "/remind daily takes days too" {
+  setup_sched
+  out="$(cmd_reply "/remind daily 08:00 seg-sex tomar o remédio")"
+  [[ "$out" == *"weekdays"* ]]
+  [ "$(job_field 1 .days)" = "12345" ]
+  [ "$(job_field 1 .action)" = "send" ]
+  teardown_lib
+}
+
+@test "a daily job with days advances to the next allowed day after firing" {
+  setup_sched
+  stub_prompt 0
+  cmd_reply "/daily 15:00 sex rode o friday-review" >/dev/null
+  set_due 1 -5
+  tick_now
+  [ "$(job_field 1 .runs)" -eq 1 ]
+  [ "$(TZ=America/Sao_Paulo date -d "@$(job_field 1 .next_run)" '+%u %H:%M')" = "5 15:00" ]
+  [ "$(job_field 1 .next_run)" -gt "$(date +%s)" ]
+  teardown_lib
+}
+
 @test "/in schedules relative to now" {
   setup_sched
   before="$(date +%s)"

@@ -125,6 +125,7 @@ update:  v$(cat -- "$STATE_DIR/update-available") available — send /update now
 /at 18:00 <what> remind me once, at a time (or /at 2026-08-12 09:00 …)
 /every 30m <what>  repeat on an interval
 /daily 09:00 <what>  repeat every day at that time
+                 (or only some days: /daily 15:00 sex …, seg-sex, úteis, fds)
 /remind 22:00 <text> send exactly that text, no agent turn
                  (also /remind every 2h … and /remind daily 09:00 …)
 /jobs            list this conversation's scheduled jobs

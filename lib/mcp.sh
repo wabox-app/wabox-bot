@@ -69,11 +69,12 @@ mcp_tools_json() {
   },
   {
     "name": "schedule_daily",
-    "description": "Register a repeating check at a wall-clock time each day. Holds its hour across DST changes. Fires as a standing turn with the same NOOP suppression as schedule_every.",
+    "description": "Register a repeating check at a wall-clock time, every day or only on some days of the week. Holds its hour across DST changes. Fires as a standing turn with the same NOOP suppression as schedule_every. For a weekly job, set `days` instead of asking yourself \"is it Friday?\" in the text: that wakes you every day just to answer NOOP.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "time": {"type": "string", "description": "Time of day: 09:00, 9h30, 9am."},
+        "days": {"type": "string", "description": "Optional. Days it runs: fri, sex, mon-fri, seg,qua,sex, weekdays/úteis, weekend/fds. Omit for every day."},
         "text": {"type": "string", "description": "What to check, and what is worth messaging about."}
       },
       "required": ["time", "text"]
@@ -148,7 +149,21 @@ mcp_call_tool() {
     schedule_daily)
       a="$(jq -r '.time // ""' <<<"$args_json")"
       b="$(jq -r '.text // ""' <<<"$args_json")"
-      cmd_main "$slug" "/daily $a $b"
+      local days
+      days="$(jq -r '.days // ""' <<<"$args_json")"
+      days="${days// /}"
+      if [[ -n "$days" ]]; then
+        # Checked here, not left to /daily: there an unreadable day spec is
+        # taken as the first word of the instruction, which is right for a
+        # human typing and wrong for a field that can only mean days.
+        if ! sched_parse_days "$days" >/dev/null; then
+          printf 'I couldn'"'"'t read "%s" as days of the week. Use e.g. fri, mon-fri, mon,wed,fri, weekdays or weekend.' "$days"
+          return 2
+        fi
+        cmd_main "$slug" "/daily $a $days $b"
+      else
+        cmd_main "$slug" "/daily $a $b"
+      fi
       ;;
     schedule_message)
       a="$(jq -r '.when // ""' <<<"$args_json")"

@@ -453,6 +453,7 @@ in the conversation that registered it.
 /at 2026-08-12 09:00 renew the passport
 /every 30m check my calendar and only ping me if something needs me
 /daily 09:00 morning digest: calendar, todos, anything overdue
+/daily 15:00 sex weekly review
 /jobs
 /cancel 3            (or /cancel all)
 ```
@@ -462,6 +463,12 @@ in the conversation that registered it.
   and a bare time that has already passed today means tomorrow. Durations are
   `90s`, `30m`, `2h`, `1d`, `1w` or combinations (`1h30m`); a bare number is
   minutes.
+- **`/daily` can be limited to days of the week** with a token right after the
+  time: `sex`, `sexta`, `fri`, lists (`seg,qua,sex`), ranges (`seg-sex`, or
+  `sex-seg` across the weekend), `úteis`/`weekdays` and `fds`/`weekend`. Only a
+  token that reads wholly as days counts, so an instruction starting with an
+  ordinary word is left alone. Use this instead of a daily job that asks "is it
+  Friday?": that wakes the agent every day just to answer `NOOP`.
 - **Recurring jobs** (`/every`, `/daily`) fire as a *heartbeat*: the turn is told
   nobody is waiting and that it should reply `NOOP` unless something genuinely
   needs you, so a quiet check sends nothing. A one-shot gets the opposite

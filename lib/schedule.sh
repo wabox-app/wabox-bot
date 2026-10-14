@@ -95,24 +95,99 @@ sched_parse_time() {
   printf '%02d:%02d' "$h" "$m"
 }
 
-# sched_next_daily <tz> <HH:MM> [after_epoch] → epoch of the next occurrence
-# strictly after `after`. Deliberately recomputed as a *wall-clock* time under
-# the zone instead of adding 86400, so a daily job stays at its stated hour
-# across a DST change rather than drifting by one.
+# sched_parse_days <str> → ISO weekday digits (1=Mon … 7=Sun), sorted, on
+# stdout; rc 1 when the token isn't a day spec (so the caller treats it as the
+# start of the instruction instead). Days exist because without them a weekly
+# job was registered as a daily one that asks the agent "is it Friday?" — a full
+# turn every day to answer NOOP six times out of seven.
+#
+# Accepts Portuguese and English, short or long (sex, sexta, sexta-feira, fri,
+# friday), comma lists (seg,qua,sex), ranges that may wrap past Sunday
+# (seg-sex, sex-seg), and úteis/weekdays, fds/weekend. Every day of the week
+# normalises to "", i.e. plain daily.
+sched_parse_days() {
+  local s="${1,,}" part a b i out="" d
+  s="${s//á/a}"
+  s="${s//ú/u}"
+  s="${s//-feira/}"
+  [[ -n "$s" ]] || return 1
+  local -A n=(
+    [seg]=1 [segunda]=1 [mon]=1 [monday]=1
+    [ter]=2 [terca]=2 [terça]=2 [tue]=2 [tuesday]=2
+    [qua]=3 [quarta]=3 [wed]=3 [wednesday]=3
+    [qui]=4 [quinta]=4 [thu]=4 [thursday]=4
+    [sex]=5 [sexta]=5 [fri]=5 [friday]=5
+    [sab]=6 [sabado]=6 [sat]=6 [saturday]=6
+    [dom]=7 [domingo]=7 [sun]=7 [sunday]=7
+  )
+  local IFS=,
+  for part in $s; do
+    case "$part" in
+      uteis | weekdays) out+=12345; continue ;;
+      fds | weekend | weekends) out+=67; continue ;;
+    esac
+    if [[ "$part" == *-* ]]; then
+      a="${n[${part%%-*}]:-}"
+      b="${n[${part#*-}]:-}"
+      [[ -n "$a" && -n "$b" ]] || return 1
+      i="$a"
+      while :; do
+        out+="$i"
+        ((i == b)) && break
+        i=$((i % 7 + 1))
+      done
+    else
+      d="${n[$part]:-}"
+      [[ -n "$d" ]] || return 1
+      out+="$d"
+    fi
+  done
+  [[ -n "$out" ]] || return 1
+  out="$(printf '%s' "$out" | fold -w1 | sort -u | tr -d '\n')"
+  [[ "$out" == 1234567 ]] && out=""
+  printf '%s' "$out"
+}
+
+# sched_days_label <digits> → "weekdays", "weekends", or "Mon,Wed,Fri" for the
+# /jobs echo. English like the rest of the spec strings.
+sched_days_label() {
+  local days="$1" i out=""
+  local -a names=("" Mon Tue Wed Thu Fri Sat Sun)
+  case "$days" in
+    12345) printf 'weekdays'; return ;;
+    67) printf 'weekends'; return ;;
+  esac
+  for ((i = 0; i < ${#days}; i++)); do
+    out+="${out:+,}${names[${days:i:1}]}"
+  done
+  printf '%s' "$out"
+}
+
+# sched_next_daily <tz> <HH:MM> [after_epoch] [days] → epoch of the next
+# occurrence strictly after `after`, on one of `days` (ISO digits; empty = any
+# day). Deliberately recomputed as a *wall-clock* time under the zone instead of
+# adding 86400, so a daily job stays at its stated hour across a DST change
+# rather than drifting by one.
 sched_next_daily() {
-  local tz="$1" hhmm="$2" after="${3:-}" day cand
+  local tz="$1" hhmm="$2" after="${3:-}" days="${4:-}" day cand i
   [[ -n "$after" ]] || after="$(date +%s)"
   day="$(sched_date "$tz" -d "@$after" +%F)" || return 1
-  cand="$(sched_date "$tz" -d "$day $hhmm" +%s)" || return 1
-  if ((cand <= after)); then
+  # Eight tries: today may already be past the hour, and then a whole week of
+  # candidates still has to fit.
+  for ((i = 0; i < 8; i++)); do
+    cand="$(sched_date "$tz" -d "$day $hhmm" +%s)" || return 1
+    if ((cand > after)) &&
+      [[ -z "$days" || "$days" == *"$(sched_date "$tz" -d "$day" +%u)"* ]]; then
+      printf '%d' "$cand"
+      return 0
+    fi
     # Advance the *date* on its own and re-resolve the wall-clock time. Rolling
     # the whole string ("$day $hhmm +1 day") looks equivalent and is not: GNU
     # date reads the `+1` in "09:00 +1 day" as a UTC offset, silently shifting
     # the result by an hour instead of by a day.
     day="$(sched_date "$tz" -d "$day +1 day" +%F)" || return 1
-    cand="$(sched_date "$tz" -d "$day $hhmm" +%s)" || return 1
-  fi
-  printf '%d' "$cand"
+  done
+  return 1
 }
 
 # sched_human_dur <seconds> → "45s" / "20min" / "2h05min" / "1d3h"
@@ -160,7 +235,7 @@ sched_job_file() { printf '%s/%s/%s.json' "$JOBS_DIR" "$1" "$2"; }
 SCHED_FS=$'\x1f'
 sched_fields() {
   jq -r '[.kind, (.rule // ""), (.spec // ""), (.action // "prompt"),
-          (.tz // ""), (.next_run // 0)] | map(tostring) | join("\u001f")' "$1"
+          (.tz // ""), (.next_run // 0), (.days // "")] | map(tostring) | join("\u001f")' "$1"
 }
 
 # Next free id for a conversation: max existing + 1. Small integers, because
@@ -194,6 +269,8 @@ sched_add() {
   # message the user reads must not carry the agent preamble) but is separate
   # from it, because a byte-exact *prompt* is a legitimate combination too.
   local raw="${8:-false}"
+  # ISO weekday digits for a daily job limited to some days; empty = every day.
+  local days="${9:-}"
   local dir="$JOBS_DIR/$slug"
   mkdir -p "$dir"
 
@@ -217,9 +294,11 @@ sched_add() {
       --argjson next_run "$next_run" \
       --argjson created "$(date +%s)" \
       --argjson raw "$raw" \
+      --arg days "$days" \
       '{id: $id, kind: $kind, rule: $rule, spec: $spec, action: $action,
         text: $text, tz: $tz, raw: $raw, next_run: $next_run, created: $created,
-        last_run: 0, runs: 0, deferred_since: 0}' >"$tmp"
+        last_run: 0, runs: 0, deferred_since: 0}
+       + (if $days == "" then {} else {days: $days} end)' >"$tmp"
     mv "$tmp" "$dir/$new_id.json"
     printf '%s' "$new_id"
   )" || rc=$?
@@ -332,8 +411,8 @@ sched_advance() {
     flock -x 7
     [[ -f "$file" ]] || exit 0
 
-    local kind rule spec action tz next_run
-    IFS=$SCHED_FS read -r kind rule spec action tz next_run < <(sched_fields "$file") || true
+    local kind rule spec action tz next_run days
+    IFS=$SCHED_FS read -r kind rule spec action tz next_run days < <(sched_fields "$file") || true
     [[ -n "$kind" ]] || exit 0
 
     if [[ "$kind" == once ]]; then
@@ -350,7 +429,7 @@ sched_advance() {
         nr=$((nr + rule))
       done
     else
-      nr="$(sched_next_daily "$tz" "$rule" "$now")"
+      nr="$(sched_next_daily "$tz" "$rule" "$now" "$days")"
     fi
 
     local tmp="$file.tmp"
@@ -420,15 +499,17 @@ sched_fire() {
     exec 6>&-
     return 0
   fi
-  local kind rule spec action tz next_run text
-  IFS=$SCHED_FS read -r kind rule spec action tz next_run < <(sched_fields "$file") || true
+  # Every reader names all seven fields: `read` folds whatever is left over into
+  # its last variable, so dropping `days` here would turn next_run into "N␟5".
+  local kind rule spec action tz next_run days text
+  IFS=$SCHED_FS read -r kind rule spec action tz next_run days < <(sched_fields "$file") || true
   if [[ -z "$kind" ]]; then
     log_warn "job[$slug#$id] unreadable record; skipping"
     exec 6>&-
     return 0
   fi
-  # Not folded into sched_fields: its field order is shared by three readers and
-  # `read` would fold a trailing seventh field into next_run.
+  # Not folded into sched_fields: they're multi-line or rarely needed, and each
+  # new field there is one more every reader has to name.
   local created
   text="$(jq -r '.text' "$file")"
   created="$(jq -r '.created // 0' "$file")"
@@ -667,7 +748,7 @@ sched_handle_command() {
   # A job either runs a turn (the default) or just delivers its text. `raw`
   # travels with send: the wrapper is instructions addressed to an agent, and
   # delivering it to a human would be gibberish.
-  local job_action=prompt job_raw=false
+  local job_action=prompt job_raw=false job_days=""
 
   # /remind is the send-mode twin of the four verbs above, with the same
   # grammar folded into one command: an optional leading `every`/`daily` picks
@@ -709,6 +790,7 @@ sched_handle_command() {
 /at 2026-08-12 09:00 …   once, on a date
 /every 30m <what>        repeating, on an interval
 /daily 09:00 <what>      repeating, at a wall-clock time
+/daily 15:00 sex <what>  only on some days: sex, seg-sex, seg,qua,sex, úteis, fds
 /remind 22:00 <text>     same times, but sends that text verbatim — no agent
                          turn (also /remind every 2h … and /remind daily 09:00 …)
 /jobs · /cancel <n>"
@@ -783,7 +865,16 @@ $usage" "$msg_id" "$stem")"
       kind=daily
       rule="$hhmm"
       spec="daily $hhmm"
-      next_run="$(sched_next_daily "$tz" "$hhmm" "$now")"
+      # An optional day spec right after the time. Only a token that parses
+      # whole counts, so an instruction that merely starts with a word is safe.
+      sched_split "$rest"
+      if [[ -n "$SCHED_FIRST" ]] && job_days="$(sched_parse_days "$SCHED_FIRST")"; then
+        rest="$SCHED_REST"
+        [[ -n "$job_days" ]] && spec+=" $(sched_days_label "$job_days")"
+      else
+        job_days=""
+      fi
+      next_run="$(sched_next_daily "$tz" "$hhmm" "$now" "$job_days")"
       ;;
   esac
 
@@ -799,7 +890,7 @@ $usage" "$msg_id" "$stem")"
   [[ "$job_action" == send ]] && spec="$spec (message)"
 
   local new_id add_rc=0
-  new_id="$(sched_add "$slug" "$kind" "$rule" "$spec" "$job_action" "$rest" "$next_run" "$job_raw")" || add_rc=$?
+  new_id="$(sched_add "$slug" "$kind" "$rule" "$spec" "$job_action" "$rest" "$next_run" "$job_raw" "$job_days")" || add_rc=$?
   if ((add_rc == 2)); then
     reply_path="$(write_outbox "$to" \
       "This conversation already has $WABOX_JOB_MAX scheduled jobs — cancel one first (/jobs)." \

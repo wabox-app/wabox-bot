@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`/daily` can run on chosen days of the week.** `/daily 15:00 sex …`,
+  `/daily 09:00 seg-sex …`, `/daily 08:00 seg,qua,sex …`, plus `úteis`/`weekdays`
+  and `fds`/`weekend`, in Portuguese or English, short or long, with ranges that
+  can wrap past Sunday. Without this a weekly job had to be a daily one asking
+  the agent "is it Friday?". On one install that ran 47 full turns just to answer
+  `NOOP`. `/remind daily` and the MCP `schedule_daily` tool (new `days` field,
+  validated so an unreadable value can't leak into the text) take days too. Jobs
+  without days still run every day.
+
 ## [0.20.0] - 2026-10-14
 
 ### Added
