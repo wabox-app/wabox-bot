@@ -156,3 +156,35 @@ mk_text() {
   handle_envelope "$WABOX_INBOX/q5.json"
   [ "$(jq -r 'has("replyTo")' "$WABOX_OUTBOX/q5.json")" = "false" ]
 }
+
+# ---- quoted replies ---------------------------------------------------------
+# With several scheduled messages in the chat, a bare "e o segundo?" is
+# ambiguous; the quote is what says which one the user is answering.
+
+@test "a reply quoting the bot's message tells the agent which one" {
+  jq -nc --arg j "$DM" '{id:"Q1", from:$j, text:"e o segundo item?",
+    quoted:{id:"X", fromMe:true, text:"Bom dia!\n1. chuva\n2. aniversário"}}' \
+    >"$WABOX_INBOX/q1.json"
+  handle_envelope "$WABOX_INBOX/q1.json"
+  out="$(jq -r .text "$WABOX_OUTBOX/q1.json")"
+  [[ "$out" == *'[Replying to your earlier message: "Bom dia! 1. chuva 2. aniversário"]'* ]]
+  [[ "$out" == *"e o segundo item?"* ]]
+}
+
+@test "a quote of someone else's message is labelled as such, and no quote adds nothing" {
+  jq -nc --arg j "$DM" '{id:"Q2", from:$j, text:"isso",
+    quoted:{id:"Y", fromMe:false, text:"minha ideia"}}' >"$WABOX_INBOX/q2.json"
+  handle_envelope "$WABOX_INBOX/q2.json"
+  [[ "$(jq -r .text "$WABOX_OUTBOX/q2.json")" == *'[Replying to an earlier message: "minha ideia"]'* ]]
+  mk_text "q3" "$DM" "Q3" "oi" ""
+  handle_envelope "$WABOX_INBOX/q3.json"
+  [[ "$(jq -r .text "$WABOX_OUTBOX/q3.json")" != *Replying* ]]
+}
+
+@test "quoting a message while typing a slash command still runs the command" {
+  jq -nc --arg j "$DM" '{id:"Q4", from:$j, text:"/ping",
+    quoted:{id:"Z", fromMe:true, text:"algo"}}' >"$WABOX_INBOX/q4.json"
+  handle_envelope "$WABOX_INBOX/q4.json"
+  [ -f "$WABOX_OUTBOX/q4.json" ]
+  [[ "$(jq -r .text "$WABOX_OUTBOX/q4.json")" != *Replying* ]]
+}

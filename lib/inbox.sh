@@ -59,6 +59,27 @@ should_quote_reply() {
   inbox_has_backlog_for "$conv_key"
 }
 
+# Echo a one-line note naming the message the user quoted (WhatsApp's "reply"),
+# or nothing when the envelope quotes nothing. Without it a reply to an older
+# message reaches the agent as a bare "e o segundo?" — and once several scheduled
+# jobs have sent things, it can't tell which one the user means. wabox only
+# carries a short excerpt, so this identifies the message rather than restating
+# it; the full text is in the session (or the job notes, see claude-code.sh).
+quote_context() {
+  local envelope="$1" qtext qmine
+  qtext="$(jq -r '.quoted.text // empty' <<<"$envelope" 2>/dev/null)"
+  [[ -n "$qtext" ]] || return 0
+  qmine="$(jq -r '.quoted.fromMe // false' <<<"$envelope" 2>/dev/null)"
+  # One line, so the note can't be mistaken for the user's own paragraphs.
+  qtext="$(tr -s '[:space:]' ' ' <<<"$qtext")"
+  qtext="${qtext% }"
+  if [[ "$qmine" == true ]]; then
+    printf '[Replying to your earlier message: "%s"]' "$qtext"
+  else
+    printf '[Replying to an earlier message: "%s"]' "$qtext"
+  fi
+}
+
 handle_envelope() {
   local in_path="$1"
   local in_name
@@ -259,6 +280,19 @@ handle_envelope() {
   # command, so media is never silently swallowed by the dispatcher.
   if ((!had_media)) && handle_slash_command "$text" "$slug" "$conv_key" "$to" "$id" "$stem"; then
     return 0
+  fi
+
+  # ---- Step 5a: say which message this one answers, if it quotes one -----
+  # After the slash-command check, so quoting a message while typing /jobs
+  # still runs the command.
+  local qnote
+  qnote="$(quote_context "$envelope")"
+  if [[ -n "$qnote" ]]; then
+    if [[ -n "$text" ]]; then
+      text="$qnote"$'\n'"$text"
+    else
+      text="$qnote"
+    fi
   fi
 
   # ---- Step 5b: enqueue this prepared turn-part ------------------------
